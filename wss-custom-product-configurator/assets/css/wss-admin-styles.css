@@ -1,0 +1,171 @@
+/* Stili per WSS Custom Product Configurator Admin */
+.wss-configurator-admin-container {
+    margin: 10px 0;
+}
+
+.wss-characteristic-block {
+    border: 1px solid #ccd0d4;
+    margin-bottom: 15px;
+    background-color: #fff;
+}
+
+.wss-characteristic-block .wss-characteristic-title {
+    background-color: #f0f0f1;
+    padding: 10px 15px;
+    margin: 0;
+    cursor: pointer;
+    font-size: 1.1em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.wss-characteristic-block .wss-characteristic-title .dashicons {
+    font-size: 20px;
+}
+
+.wss-characteristic-block .wss-characteristic-content {
+    padding: 15px;
+    border-top: 1px solid #ccd0d4;
+}
+
+.wss-characteristic-content p,
+.wss-characteristic-content .wss-form-field,
+.wss-characteristic-content .wss-option-dependency-section {
+    margin-bottom: 12px;
+}
+.wss-characteristic-content p label,
+.wss-characteristic-content .wss-form-field label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 3px;
+}
+.wss-characteristic-content input[type="text"].widefat,
+.wss-characteristic-content select.wss-char-type,
+.wss-characteristic-content input[type="text"].wss-option-icon-url,
+.wss-characteristic-content input[type="text"].wss-option-layer-url,
+.wss-characteristic-content input[type="text"].wss-option-compatibility,
+.wss-characteristic-content input[type="text"].wss-option-dependency-char,
+.wss-characteristic-content input[type="text"].wss-option-dependency-value {
+    width: 100%;
+}
+.wss-characteristic-content input[type="number"].short {
+    width: 80px;
+}
+.wss-characteristic-content input[type="number"].small-text {
+    width: 60px;
+}
+
+.wss-options-container {
+    margin-top: 15px;
+    padding-left: 20px;
+    border-left: 3px solid #7e8993;
+}
+
+.wss-option-block {
+    background-color: #f9f9f9;
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 10px;
+}
+.wss-option-block h5 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1em;
+    color: #333;
+}
+.wss-option-dependency-section h5 {
+    font-size: 0.95em;
+    margin-bottom: 5px;
+}
+.wss-option-dependency-section small {
+    font-size: 0.85em;
+    color: #555;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.wss-option-block hr.wss-option-divider {
+    border: 0;
+    border-top: 1px dashed #ccc;
+    margin: 15px 0;
+}
+.wss-option-block .button-link-delete,
+.wss-characteristic-block .button-link-delete {
+    color: #d63638;
+    border-color: transparent;
+    background: none;
+    box-shadow: none;
+    padding: 0;
+    margin-top: 5px;
+    text-decoration: none;
+}
+.wss-option-block .button-link-delete:hover,
+.wss-characteristic-block .button-link-delete:hover {
+    color: #a02222;
+    text-decoration: underline;
+}
+
+
+.wss-image-preview {
+    margin-top: 5px;
+    padding: 5px;
+    border: 1px solid #eee;
+    display: inline-block;
+    position: relative;
+}
+.wss-image-preview img {
+    max-width: 100px;
+    max-height: 100px;
+    display: block;
+}
+.wss-image-preview .wss-remove-image-button {
+    margin-left: 5px;
+}
+
+#wss-add-characteristic-button {
+    margin-top: 10px;
+}
+
+/* Placeholder per sortable */
+.wss-char-sortable-placeholder {
+    border: 2px dashed #ccd0d4;
+    background-color: #f8f9fa;
+    height: 50px;
+    margin-bottom: 15px;
+}
+
+/* Nuovi stili per l'orientamento immagine */
+.wss-image-orientation-field {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+}
+
+.wss-image-orientation-field label {
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.wss-radio-group {
+    margin-top: 8px;
+}
+
+.wss-radio-label {
+    display: inline-block !important;
+    margin-right: 20px;
+    font-weight: normal !important;
+    cursor: pointer;
+}
+
+.wss-radio-label input[type="radio"] {
+    margin-right: 5px;
+}
+
+.wss-image-orientation-field .description {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #666;
+    font-style: italic;
+}

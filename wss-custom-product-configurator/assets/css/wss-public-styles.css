@@ -1,0 +1,208 @@
+/* assets/css/wss-public-styles.css */
+
+.wss-product-configurator-container {}
+.wss-product-configurator-wrapper {}
+.wss-configurator-main-layout { display: flex; flex-direction: column; max-width: 1300px; margin: 0 auto; position: relative; }
+.wss-configurator-image-column { width: 100%; box-sizing: border-box; }
+.wss-image-container { width: 100%; height: 100%; position: relative; background-color: #f9f9f9; display: flex; align-items: center; justify-content: center; padding: 10px 0; box-sizing: border-box; }
+.wss-image-container img#wss-configured-product-image-base,
+.wss-image-container .wss-image-layer-dynamic img { display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
+
+.wss-image-container .wss-image-layer-dynamic { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.wss-configurator-options-column { width: 100%; padding: 15px; box-sizing: border-box; }
+.wss-configurator-options-column .product_title { margin-top: 0; font-size: 1.8em; margin-bottom: 15px;}
+.wss-characteristic-group { margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #e0e0e0; }
+.wss-characteristic-group:last-child { border-bottom: none; margin-bottom: 0; }
+.wss-characteristic-name { font-size: 1.1em; font-weight: 600; margin-top: 0; margin-bottom: 12px; color: #333; }
+.wss-options-list .wss-option-item { margin-bottom: 10px; }
+.wss-options-list label.wss-option-label { cursor: pointer; display: flex; align-items: center; width: 100%; padding: 8px 5px; border: 1px solid transparent; border-radius: 3px; position: relative; }
+.wss-options-list label.wss-option-label:hover { background-color: #f5f5f5; }
+.wss-options-list input[type="radio"].wss-option-selector,
+.wss-options-list input[type="checkbox"].wss-option-selector { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; padding: 0; }
+.wss-options-list label.wss-option-label::before { content: ''; display: inline-block; flex-shrink: 0; margin-right: 10px; border: 1px solid #999; background-color: #fff; }
+.wss-options-list input[type="radio"].wss-option-selector + label.wss-option-label::before { width: 18px; height: 18px; border-radius: 50%; }
+.wss-options-list input[type="radio"].wss-option-selector:checked + label.wss-option-label::before { background-color: #0073aa; border-color: #005a87; box-shadow: inset 0 0 0 3px #fff; }
+.wss-options-list input[type="radio"].wss-option-selector:focus + label.wss-option-label::before { box-shadow: 0 0 0 2px rgba(0, 115, 170, 0.4); }
+.wss-options-list input[type="checkbox"].wss-option-selector + label.wss-option-label::before { width: 20px; height: 20px; border-radius: 3px; }
+.wss-options-list input[type="checkbox"].wss-option-selector:checked + label.wss-option-label::before { background-color: #0073aa; border-color: #005a87; content: '\2713'; color: #fff; font-size: 14px; text-align: center; line-height: 19px; }
+.wss-options-list input[type="checkbox"].wss-option-selector:focus + label.wss-option-label::before { box-shadow: 0 0 0 2px rgba(0, 115, 170, 0.4); }
+.wss-options-list .wss-option-icon, 
+.wss-options-list .wss-option-icon-placeholder { width: 28px; height: 28px; object-fit: contain; margin-right: 8px; flex-shrink: 0; border: 1px solid #ddd; border-radius: 2px; display: inline-block; }
+.wss-options-list .wss-option-icon-placeholder { border-style: dashed; }
+.wss-options-list .wss-option-label .wss-option-text-wrapper { display: flex; flex-direction: column; flex-grow: 1; }
+.wss-options-list .wss-option-text { font-size: 0.95em; color: #222; }
+.wss-options-list .wss-option-details-line { display: flex; flex-wrap: wrap; font-size: 0.85em; color: #555; margin-top: 2px; }
+.wss-options-list select.wss-option-selector { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 3px; background-color: #fff; }
+.wss-options-list .wss-option-icon-inline { max-width: 20px; max-height: 20px; margin-right: 5px; vertical-align: middle; }
+.wss-option-compatibility-note { margin-right: 5px; }
+.wss-option-price-change { white-space: nowrap; font-weight: 500; }
+.wss-current-price { font-size: 1.0em; font-weight: normal; margin-bottom: 15px; color: #333; text-align: right; padding: 5px 0; }
+.wss-current-price p.price { color: inherit; font-size: inherit; font-weight: inherit; margin:0; }
+.wss-add-to-cart-section { margin-top: 20px; padding-top: 20px; border-top: 1px dashed #ddd; display: flex; align-items: center; }
+.wss-add-to-cart-section .quantity { margin-right: 10px; }
+
+/* --- Stili per orientamento orizzontale --- */
+.wss-orientation-horizontal .wss-configurator-main-layout {
+    max-width: 1140px;
+    box-sizing: border-box;
+    padding: 0;
+}
+
+.wss-orientation-horizontal .wss-configurator-image-column {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.wss-orientation-horizontal .wss-image-container {
+    width: 100%;
+    height: auto;
+    /* Rimuoviamo aspect-ratio fisso e lasciamo che sia l'immagine a determinare le proporzioni */
+    aspect-ratio: unset;
+    /* Rimuoviamo il max-height fisso e l'overflow hidden per non tagliare l'immagine */
+    /* max-height: 70vh; RIMOSSO */
+    /* overflow: hidden; RIMOSSO */
+    overflow: visible;
+    /* Per il calcolo dinamico delle proporzioni */
+    position: relative;
+    /* Proporzioni di default in caso l'immagine non sia ancora caricata */
+    min-height: 300px;
+}
+
+/* Approccio diverso per la rotazione: usiamo una scala dinamica */
+.wss-orientation-horizontal .wss-image-container img#wss-configured-product-image-base,
+.wss-orientation-horizontal .wss-image-container .wss-image-layer-dynamic img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform-origin: center center;
+    /* La rotazione e il ridimensionamento avvengono insieme */
+    /* width e height verranno calcolati via JavaScript per adattarsi perfettamente */
+    width: auto;
+    height: auto;
+    max-width: none;
+    max-height: none;
+    /* Applichiamo solo la rotazione base, la scala verrà gestita da JS */
+    transform: translate(-50%, -50%) rotate(90deg);
+}
+
+/* Classe helper per quando le dimensioni sono state calcolate */
+.wss-orientation-horizontal .wss-image-container.wss-dimensions-calculated img#wss-configured-product-image-base,
+.wss-orientation-horizontal .wss-image-container.wss-dimensions-calculated .wss-image-layer-dynamic img {
+    /* Le dimensioni specifiche verranno applicate inline via JS */
+}
+
+.wss-orientation-horizontal .wss-configurator-options-column {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* --- Layout Mobile Specifico (< 768px) --- */
+@media (max-width: 767.98px) {
+    .wss-configurator-image-column {
+        position: relative; 
+        width: 100%; 
+        min-height: 50vh; 
+        max-height: 60vh; 
+        height: 60vh;
+        display: flex; 
+        align-items: center;
+        justify-content: center;
+        z-index: 10; 
+        background-color: #fff; 
+        border-bottom: 1px solid #eee;
+        padding:0; 
+        overflow: hidden; 
+    }
+    
+    .wss-configurator-options-column { 
+        flex-grow: 1; 
+        height: auto;
+        overflow-y: visible;
+        padding: 10px; 
+        width: 100%; 
+        margin-left: 0; 
+        transition: padding-top 0.2s ease-out;
+    }
+    .wss-configurator-options-column .product_title { font-size: 1.5em; margin-bottom: 10px; }
+    .wss-current-price { font-size: 1.0em; margin-bottom: 15px; padding: 8px 0; text-align: left; }
+    .wss-add-to-cart-section { flex-direction: column; align-items: stretch; }
+    .wss-add-to-cart-section .quantity { margin-right: 0; margin-bottom: 10px; }
+    .wss-add-to-cart-section .single_add_to_cart_button { width: 100%; }
+    
+    /* Orientamento orizzontale su mobile */
+    .wss-orientation-horizontal .wss-configurator-image-column {
+        height: auto;
+        min-height: unset;
+        max-height: unset;
+    }
+    
+    .wss-orientation-horizontal .wss-image-container {
+        aspect-ratio: 3/1; /* Proporzione corretta per l'immagine ruotata */
+        height: auto;
+        min-height: unset;
+        max-height: 40vh; /* Limita l'altezza massima */
+        overflow: hidden;
+    }
+}
+
+/* --- Layout Desktop (>= 768px) --- */
+@media (min-width: 768px) {
+    /* Layout verticale (default) */
+    .wss-orientation-vertical .wss-configurator-main-layout { flex-direction: row; }
+    .wss-orientation-vertical .wss-configurator-image-column { padding: 15px; box-sizing: border-box; background-color: #fff; border-right: 1px solid #eee; overflow: hidden; z-index: 100; }
+    .wss-orientation-vertical .wss-configurator-options-column { box-sizing: border-box; padding: 20px 25px; overflow-y: auto; }
+    
+    /* Layout orizzontale */
+    .wss-orientation-horizontal .wss-configurator-main-layout { 
+        flex-direction: column; 
+    }
+    
+    .wss-orientation-horizontal .wss-configurator-image-column {
+        position: relative;
+        width: 100%;
+        padding: 0;
+        margin-bottom: 0;
+        background-color: #fff;
+        border-right: none;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .wss-orientation-horizontal.wss-image-fixed .wss-configurator-image-column {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+    }
+    
+    .wss-orientation-horizontal .wss-configurator-options-column {
+        padding: 30px;
+    }
+
+    .wss-configurator-image-column.wss-image-fixed {
+        position: fixed;
+        top: var(--wss-sticky-header-top, 0px);
+        left: 0;
+        z-index: 1000;
+        background: #fff;
+        width: var(--wss-sticky-image-width, 50%) !important;
+        max-width: var(--wss-sticky-image-width, 650px) !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+
+    .wss-orientation-vertical.wss-sticky-active .wss-configurator-options-column {
+        padding-left: var(--wss-sticky-image-width, 650px) !important;
+        transition: padding-left 0.2s;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1199.98px) {
+    .wss-orientation-vertical .wss-configurator-image-column { width: 40% !important; max-width: none; }
+}
+
+@media (min-width: 1200px) {
+    .wss-orientation-vertical .wss-configurator-image-column { width: 50% !important; max-width: 650px !important; }
+}
+
+.wss-element-hidden { display: none !important; }
