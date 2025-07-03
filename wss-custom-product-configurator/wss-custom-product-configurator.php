@@ -203,13 +203,19 @@ final class WSS_Custom_Product_Configurator {
                 $base_price = 0; 
             }
             
+			// Carica le impostazioni del plugin
+            $plugin_settings = get_option('wss_configurator_settings', array());
+            
             $localized_data = array(
                 'ajax_url' => admin_url( 'admin-ajax.php' ),
                 'nonce' => wp_create_nonce( 'wss_configurator_nonce' ),
                 'product_id' => $product_id,
                 'product_base_price' => floatval($base_price),
-                'config_settings' => $config_data ? $config_data : array(), // Già verificato sopra
-                'image_orientation' => isset($config_data['image_orientation']) ? $config_data['image_orientation'] : 'vertical', // Passa l'orientamento
+                'config_settings' => $config_data ? $config_data : array(),
+                'image_orientation' => isset($config_data['image_orientation']) ? $config_data['image_orientation'] : 'vertical',
+                'debug_panel_enabled' => isset($plugin_settings['debug_panel_visible']) ? (bool)$plugin_settings['debug_panel_visible'] : false,
+                'image_column_width' => isset($plugin_settings['image_column_width']) ? $plugin_settings['image_column_width'] : '50',
+                'image_column_width_unit' => isset($plugin_settings['image_column_width_unit']) ? $plugin_settings['image_column_width_unit'] : '%',
                 'wc_price_args' => array( 
                     'currency_symbol'    => html_entity_decode(get_woocommerce_currency_symbol()), 
                     'decimal_separator'  => wc_get_price_decimal_separator(),

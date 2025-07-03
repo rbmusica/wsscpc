@@ -274,7 +274,7 @@ class WSS_Configurator_Settings {
             'wss-configurator-settings-general'
         );
 
-        // Esempio di campo impostazione
+        // Campo di setting e impostazione
         add_settings_field(
             'wss_enable_debug',
             'Modalità Debug',
@@ -282,6 +282,22 @@ class WSS_Configurator_Settings {
             'wss-configurator-settings-general',
             'wss_general_section'
         );
+		// Campo per abilitare/disabilitare debug
+        add_settings_field(
+            'wss_enable_debug_panel',
+            'Pannello Debug Visibile',
+            array( $this, 'render_debug_panel_field' ),
+            'wss-configurator-settings-general',
+            'wss_general_section'
+        );
+        // Campo per larghezza colonna immagine
+        add_settings_field(
+            'wss_image_column_width',
+            'Larghezza Colonna Immagine',
+            array( $this, 'render_image_width_field' ),
+            'wss-configurator-settings-general',
+            'wss_general_section'
+        );		
     }
 
     public function render_debug_field() {
@@ -290,6 +306,66 @@ class WSS_Configurator_Settings {
         ?>
         <input type="checkbox" name="wss_configurator_settings[debug_mode]" value="1" <?php checked($debug_enabled, 1); ?> />
         <label><?php _e('Abilita log di debug per il configuratore', 'wss-custom-product-configurator'); ?></label>
+        <?php
+    }
+
+	public function render_debug_panel_field() {
+        $options = get_option('wss_configurator_settings');
+        $debug_panel_enabled = isset($options['debug_panel_visible']) ? $options['debug_panel_visible'] : false;
+        ?>
+        <input type="checkbox" name="wss_configurator_settings[debug_panel_visible]" value="1" <?php checked($debug_panel_enabled, 1); ?> />
+        <label><?php _e('Mostra il pannello di debug nella pagina prodotto (utile per sviluppo)', 'wss-custom-product-configurator'); ?></label>
+        <p class="description"><?php _e('Quando attivo, appare una finestra di debug in alto a destra nella pagina prodotto. Disattivare in produzione.', 'wss-custom-product-configurator'); ?></p>
+        <?php
+    }
+
+    public function render_image_width_field() {
+        $options = get_option('wss_configurator_settings');
+        $width_value = isset($options['image_column_width']) ? $options['image_column_width'] : '50';
+        $width_unit = isset($options['image_column_width_unit']) ? $options['image_column_width_unit'] : '%';
+        ?>
+        <input type="number" name="wss_configurator_settings[image_column_width]" value="<?php echo esc_attr($width_value); ?>" min="200" max="800" step="10" style="width: 80px;" />
+        <select name="wss_configurator_settings[image_column_width_unit]">
+            <option value="%" <?php selected($width_unit, '%'); ?>>%</option>
+            <option value="px" <?php selected($width_unit, 'px'); ?>>px</option>
+        </select>
+        <p class="description"><?php _e('Larghezza della colonna immagine nel layout verticale. Default: 50%. Range: 200-800px o 30-70%.', 'wss-custom-product-configurator'); ?></p>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            $('input[name="wss_configurator_settings[image_column_width]"]').on('input', function() {
+                const unit = $('select[name="wss_configurator_settings[image_column_width_unit]"]').val();
+                const value = parseInt($(this).val());
+                
+                if (unit === '%') {
+                    $(this).attr('min', '30').attr('max', '70');
+                    if (value < 30) $(this).val('30');
+                    if (value > 70) $(this).val('70');
+                } else {
+                    $(this).attr('min', '200').attr('max', '800');
+                    if (value < 200) $(this).val('200');
+                    if (value > 800) $(this).val('800');
+                }
+            });
+            
+            $('select[name="wss_configurator_settings[image_column_width_unit]"]').on('change', function() {
+                const $input = $('input[name="wss_configurator_settings[image_column_width]"]');
+                const value = parseInt($input.val());
+                
+                if ($(this).val() === '%') {
+                    $input.attr('min', '30').attr('max', '70');
+                    if (value > 70 || value < 30) {
+                        $input.val('50');
+                    }
+                } else {
+                    $input.attr('min', '200').attr('max', '800');
+                    if (value < 200 || value > 800) {
+                        $input.val('400');
+                    }
+                }
+            });
+        });
+        </script>
         <?php
     }
 

@@ -191,11 +191,7 @@
 
 .wss-element-hidden { display: none !important; }
 
-Perfetto! Hai ragione, serve un approccio completamente diverso. Creiamo un contenitore sticky unificato che gestisce immagine + opzioni insieme, con scroll interno per le opzioni.
-Soluzione: Contenitore Sticky Unificato
-File: assets/css/wss-public-styles.css
-Aggiungi queste regole CSS alla fine del file (dopo la riga con /* Descrizione a tutta larghezza nel layout verticale */):
-css/* Descrizione a tutta larghezza nel layout verticale */
+/* Descrizione a tutta larghezza nel layout verticale */
 @media (min-width: 768px){
     .wss-orientation-vertical .wss-configurator-description-full{
         max-width:1300px;
@@ -205,6 +201,33 @@ css/* Descrizione a tutta larghezza nel layout verticale */
     .wss-orientation-vertical .wss-configurator-main-layout{
         clear:both;
     }
+}
+
+/* **CORREZIONE POSIZIONAMENTO CONFIGURATORE** */
+.wss-product-configurator-container {
+    /* Assicura che il configuratore non sia spinto troppo in basso */
+    position: relative;
+    z-index: 1;
+}
+
+/* Forza il configuratore a posizionarsi dopo il contenuto principale ma prima del footer */
+.wss-product-configurator-container::before {
+    content: '';
+    display: block;
+    height: 0;
+    clear: both;
+}
+
+/* Previeni che altri elementi float influenzino il posizionamento */
+.wss-configurator-main-layout {
+    clear: both;
+    position: relative;
+}
+
+/* Correzione per temi che usano positioning assoluto problematico */
+.single-product .wss-product-configurator-container {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
 }
 
 /* **NUOVE REGOLE PER CONTENITORE STICKY UNIFICATO** */
@@ -262,3 +285,4 @@ css/* Descrizione a tutta larghezza nel layout verticale */
         margin-left: 40% !important;
     }
 }
+
