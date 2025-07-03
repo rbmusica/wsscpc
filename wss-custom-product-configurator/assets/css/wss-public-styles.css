@@ -179,22 +179,6 @@
     .wss-orientation-horizontal .wss-configurator-options-column {
         padding: 30px;
     }
-
-    .wss-configurator-image-column.wss-image-fixed {
-        position: fixed;
-        top: var(--wss-sticky-header-top, 0px);
-        left: 0;
-        z-index: 1000;
-        background: #fff;
-        width: var(--wss-sticky-image-width, 50%) !important;
-        max-width: var(--wss-sticky-image-width, 650px) !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    }
-
-    .wss-orientation-vertical.wss-sticky-active .wss-configurator-options-column {
-        padding-left: var(--wss-sticky-image-width, 650px) !important;
-        transition: padding-left 0.2s;
-    }
 }
 
 @media (min-width: 768px) and (max-width: 1199.98px) {

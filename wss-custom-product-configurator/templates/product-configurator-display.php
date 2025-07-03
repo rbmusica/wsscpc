@@ -44,11 +44,7 @@ if ( post_password_required() ) {
 	return;
 }
 ?>
-<?php /*
- * Consiglio: inserisci lo shortcode del configuratore prodotto fuori da tag <p> o <div> con larghezza limitata,
- * per evitare che la descrizione venga compressa a sinistra nel layout verticale sticky.
- */ ?>
-<div id="product-<?php echo esc_attr($product_id); ?>" <?php wc_product_class( 'wss-product-configurator-container wss-orientation-' . esc_attr($image_orientation), $product ); ?> data-wss-sticky="0">
+<div id="product-<?php echo esc_attr($product_id); /* Usiamo ID prodotto per unicità */ ?>" <?php wc_product_class( 'wss-product-configurator-container wss-orientation-' . esc_attr($image_orientation), $product ); ?>>
     
     <div id="wss-product-configurator-<?php echo esc_attr( $product_id ); ?>" class="wss-product-configurator-wrapper" data-orientation="<?php echo esc_attr($image_orientation); ?>">
         <div class="wss-configurator-main-layout">

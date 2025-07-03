@@ -34,8 +34,6 @@ jQuery(document).ready(function($) {
     const $wpAdminBar = $('#wpadminbar');
     const $tabsWrapper = $('.woocommerce-tabs.wc-tabs-wrapper');
 
-    const stickyImageWidth = typeof wss_configurator_data.sticky_image_width !== 'undefined' && wss_configurator_data.sticky_image_width !== '' ? wss_configurator_data.sticky_image_width : '';
-
     // INSERISCI QUI LA NUOVA FUNZIONE - DOPO LE VARIABILI E PRIMA DI calculateFixedImageTop
     function calculateRotatedImageDimensions() {
         if (imageOrientation !== 'horizontal') return;
@@ -411,53 +409,6 @@ jQuery(document).ready(function($) {
             });
         }
     }
-
-    // --- Sticky/fixed per layout verticale (anche in base alle opzioni admin) ---
-    // Recupera le opzioni globali dal backend (iniettale in wss_configurator_data se necessario)
-    const stickyHeaderEnabled = typeof wss_configurator_data.sticky_header !== 'undefined' && wss_configurator_data.sticky_header == 1;
-    const stickyHeaderHeight = typeof wss_configurator_data.sticky_header_height !== 'undefined' ? parseInt(wss_configurator_data.sticky_header_height, 10) : 0;
-
-    function handleStickyImageVertical() {
-        if (imageOrientation !== 'vertical' || !stickyHeaderEnabled) {
-            imageColumn.removeClass('wss-image-fixed');
-            imageColumn[0]?.style.removeProperty('--wss-sticky-header-top');
-            imageColumn[0]?.style.removeProperty('--wss-sticky-image-width');
-            productContainer.removeClass('wss-sticky-active');
-            return;
-        }
-        if ($(window).width() < 768) {
-            imageColumn.removeClass('wss-image-fixed');
-            imageColumn[0]?.style.removeProperty('--wss-sticky-header-top');
-            imageColumn[0]?.style.removeProperty('--wss-sticky-image-width');
-            productContainer.removeClass('wss-sticky-active');
-            return;
-        }
-        let topPx = stickyHeaderHeight;
-        if ($('#wpadminbar').length && $('#wpadminbar').is(':visible')) {
-            topPx += $('#wpadminbar').outerHeight();
-        }
-        const wrapperOffset = configuratorWrapper.offset().top;
-        if ($(window).scrollTop() + topPx >= wrapperOffset) {
-            imageColumn.addClass('wss-image-fixed');
-            imageColumn[0].style.setProperty('--wss-sticky-header-top', topPx + 'px');
-            if (stickyImageWidth) {
-                imageColumn[0].style.setProperty('--wss-sticky-image-width', stickyImageWidth);
-            } else {
-                imageColumn[0].style.removeProperty('--wss-sticky-image-width');
-            }
-            productContainer.addClass('wss-sticky-active');
-        } else {
-            imageColumn.removeClass('wss-image-fixed');
-            imageColumn[0]?.style.removeProperty('--wss-sticky-header-top');
-            imageColumn[0]?.style.removeProperty('--wss-sticky-image-width');
-            productContainer.removeClass('wss-sticky-active');
-        }
-    }
-
-    // Hook scroll e resize
-    $(window).on('scroll resize', handleStickyImageVertical);
-    // Inizializza subito
-    handleStickyImageVertical();
 
     // --- Funzioni Core ---
     function initializeConfigurator() {

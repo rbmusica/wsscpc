@@ -282,30 +282,6 @@ class WSS_Configurator_Settings {
             'wss-configurator-settings-general',
             'wss_general_section'
         );
-        // Sticky header
-        add_settings_field(
-            'wss_sticky_header',
-            'Sticky Header',
-            array( $this, 'render_sticky_header_field' ),
-            'wss-configurator-settings-general',
-            'wss_general_section'
-        );
-        // Altezza header fisso
-        add_settings_field(
-            'wss_sticky_header_height',
-            'Altezza header fisso (px)',
-            array( $this, 'render_sticky_header_height_field' ),
-            'wss-configurator-settings-general',
-            'wss_general_section'
-        );
-        // Larghezza immagine sticky
-        add_settings_field(
-            'wss_sticky_image_width',
-            'Larghezza immagine sticky (px o %)',
-            array( $this, 'render_sticky_image_width_field' ),
-            'wss-configurator-settings-general',
-            'wss_general_section'
-        );
     }
 
     public function render_debug_field() {
@@ -314,33 +290,6 @@ class WSS_Configurator_Settings {
         ?>
         <input type="checkbox" name="wss_configurator_settings[debug_mode]" value="1" <?php checked($debug_enabled, 1); ?> />
         <label><?php _e('Abilita log di debug per il configuratore', 'wss-custom-product-configurator'); ?></label>
-        <?php
-    }
-
-    public function render_sticky_header_field() {
-        $options = get_option('wss_configurator_settings');
-        $enabled = isset($options['sticky_header']) ? $options['sticky_header'] : false;
-        ?>
-        <input type="checkbox" name="wss_configurator_settings[sticky_header]" value="1" <?php checked($enabled, 1); ?> />
-        <label><?php _e('Attiva comportamento sticky/fixed per l\'immagine del configuratore (utile se hai un header fisso)', 'wss-custom-product-configurator'); ?></label>
-        <?php
-    }
-
-    public function render_sticky_header_height_field() {
-        $options = get_option('wss_configurator_settings');
-        $height = isset($options['sticky_header_height']) ? intval($options['sticky_header_height']) : 0;
-        ?>
-        <input type="number" name="wss_configurator_settings[sticky_header_height]" value="<?php echo esc_attr($height); ?>" min="0" step="1" style="width:80px;" />
-        <label><?php _e('Specifica l\'altezza in pixel del tuo header fisso (es: 80)', 'wss-custom-product-configurator'); ?></label>
-        <?php
-    }
-
-    public function render_sticky_image_width_field() {
-        $options = get_option('wss_configurator_settings');
-        $width = isset($options['sticky_image_width']) ? esc_attr($options['sticky_image_width']) : '';
-        ?>
-        <input type="text" name="wss_configurator_settings[sticky_image_width]" value="<?php echo $width; ?>" style="width:100px;" placeholder="650px o 50%" />
-        <label><?php _e('Specifica la larghezza della colonna immagine sticky (es: 650px o 50%)', 'wss-custom-product-configurator'); ?></label>
         <?php
     }
 

@@ -209,7 +209,7 @@ final class WSS_Custom_Product_Configurator {
                 'product_id' => $product_id,
                 'product_base_price' => floatval($base_price),
                 'config_settings' => $config_data ? $config_data : array(), // Già verificato sopra
-                'image_orientation' => isset($config_data['image_orientation']) ? $config_data['image_orientation'] : 'vertical',
+                'image_orientation' => isset($config_data['image_orientation']) ? $config_data['image_orientation'] : 'vertical', // Passa l'orientamento
                 'wc_price_args' => array( 
                     'currency_symbol'    => html_entity_decode(get_woocommerce_currency_symbol()), 
                     'decimal_separator'  => wc_get_price_decimal_separator(),
@@ -217,10 +217,6 @@ final class WSS_Custom_Product_Configurator {
                     'decimals'           => wc_get_price_decimals(),
                 ),
                 'placeholder_image_url' => wc_placeholder_img_src(),
-                // OPZIONI GLOBALI PER JS
-                'sticky_header' => (int) (get_option('wss_configurator_settings')['sticky_header'] ?? 0),
-                'sticky_header_height' => (int) (get_option('wss_configurator_settings')['sticky_header_height'] ?? 0),
-                'sticky_image_width' => (string) (get_option('wss_configurator_settings')['sticky_image_width'] ?? ''),
             );
             wp_localize_script( 'wss-public-scripts', 'wss_configurator_data', $localized_data );
 		}
