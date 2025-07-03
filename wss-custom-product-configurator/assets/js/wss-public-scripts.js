@@ -54,7 +54,7 @@ let frozenTriggerPoints = null;
     function createDebugPanel() {
         if (!debugMode || debugPanel) return;
         
-        debugPanel = $(`
+		debugPanel = $(`
             <div id="wss-debug-panel" style="
                 position: fixed; 
                 top: 10px; 
@@ -72,9 +72,17 @@ let frozenTriggerPoints = null;
                 border-radius: 3px;
             ">
                 <div style="color: #fff; margin-bottom: 10px; font-weight: bold;">WSS Debug Panel</div>
+                <div style="margin-bottom: 10px;">
+                    <button id="wss-debug-clear" style="padding: 3px 6px; margin-right: 3px; font-size: 10px;">Clear</button>
+                    <button id="wss-debug-export" style="padding: 3px 6px; margin-right: 3px; font-size: 10px;">Export</button>
+                    <button id="wss-debug-copy" style="padding: 3px 6px; font-size: 10px;">Copy</button>
+                </div>
                 <div id="wss-debug-content"></div>
-                <button id="wss-debug-clear" style="margin-top: 10px; padding: 5px;">Clear</button>
-                <button id="wss-debug-export" style="margin-top: 10px; padding: 5px; margin-left: 5px;">Export</button>
+                <div style="margin-top: 10px;">
+                    <button id="wss-debug-clear-bottom" style="padding: 3px 6px; margin-right: 3px; font-size: 10px;">Clear</button>
+                    <button id="wss-debug-export-bottom" style="padding: 3px 6px; margin-right: 3px; font-size: 10px;">Export</button>
+                    <button id="wss-debug-copy-bottom" style="padding: 3px 6px; font-size: 10px;">Copy</button>
+                </div>
             </div>
         `);
         
@@ -89,6 +97,72 @@ let frozenTriggerPoints = null;
             console.log('WSS Debug Export:', debugLog);
             alert('Debug log exported to browser console');
         });
+
+        
+        // **HANDLER PER BOTTONI COPIA - NUOVO**
+        function copyDebugContent() {
+            // **METODO CORRETTO**: Usa innerHTML e converte
+            const debugContentElement = document.getElementById('wss-debug-content');
+            if (!debugContentElement || !debugContentElement.innerHTML.trim()) {
+                alert('No debug content to copy');
+                return;
+            }
+            
+            // Converte HTML in testo leggibile
+            const textContent = debugContentElement.innerText || debugContentElement.textContent;
+            const fullDebugText = `=== WSS DEBUG PANEL ===\n${textContent}\n\n=== LOGS ARRAY ===\n${JSON.stringify(debugLog, null, 2)}`;
+            
+            // **METODO ROBUSTO** per copiare
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(fullDebugText).then(function() {
+                    alert('Debug content copied to clipboard');
+                }).catch(function(err) {
+                    console.error('Clipboard API failed:', err);
+                    fallbackCopy(fullDebugText);
+                });
+            } else {
+                fallbackCopy(fullDebugText);
+            }
+        }
+        
+        function fallbackCopy(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    alert('Debug content copied to clipboard (fallback method)');
+                } else {
+                    alert('Copy failed. Please copy manually from console.');
+                    console.log('DEBUG CONTENT TO COPY:', text);
+                }
+            } catch (err) {
+                console.error('Fallback copy failed:', err);
+                alert('Copy failed. Content logged to console.');
+                console.log('DEBUG CONTENT TO COPY:', text);
+            }
+            document.body.removeChild(textArea);
+        }
+        
+        $('#wss-debug-copy, #wss-debug-copy-bottom').on('click', copyDebugContent);
+        
+        // **HANDLER PER BOTTONI DUPLICATI**
+        $('#wss-debug-clear-bottom').on('click', function() {
+            debugLog = [];
+            $('#wss-debug-content').html('');
+        });
+        
+        $('#wss-debug-export-bottom').on('click', function() {
+            console.log('WSS Debug Export:', debugLog);
+            alert('Debug log exported to browser console');
+        });
+		
     }
     
     function debugMessage(message, data = null, level = 'info') {
@@ -272,33 +346,57 @@ let frozenTriggerPoints = null;
         return { fixedImageTopPosition, descriptionHeight };
     }
     
-function getActualImageColumnWidthFromCSS() {
+	function getActualImageColumnWidthFromCSS() {
         if (imageOrientation === 'horizontal') {
             return '100%';
         }
         
         debugMessage('Getting image column width from CSS');
+		
+		// **DEBUG ESTESO PER LARGHEZZA COLONNA**
+        const debugInfo = {
+            windowWidth: $(window).width(),
+            mainLayoutWidth: mainLayout.width(),
+            imageColumnCurrentWidth: imageColumn.width(),
+            imageColumnCurrentCss: imageColumn.css('width'),
+            imageColumnCurrentStyle: imageColumn.attr('style'),
+            customWidthSetting: wss_configurator_data.image_column_width,
+            customWidthUnit: wss_configurator_data.image_column_width_unit
+        };
         
-        // **NUOVO**: Usa le impostazioni personalizzate se disponibili
+        debugMessage('Width calculation debug info', debugInfo);		
+        
+		// **CORREZIONE**: Usa le impostazioni personalizzate se disponibili
         if (typeof wss_configurator_data.image_column_width !== 'undefined' && 
             typeof wss_configurator_data.image_column_width_unit !== 'undefined') {
             
-            const customWidth = wss_configurator_data.image_column_width;
+            const customWidth = parseFloat(wss_configurator_data.image_column_width);
             const customUnit = wss_configurator_data.image_column_width_unit;
             
             debugMessage('Using custom width settings', {
                 width: customWidth,
                 unit: customUnit,
-                combined: customWidth + customUnit
+                combined: customWidth + customUnit,
+                mainLayoutWidth: mainLayout.width()
             });
             
             if (customUnit === 'px') {
-                return parseFloat(customWidth);
+                debugMessage('Applying pixel width', { finalWidth: customWidth });
+                return customWidth;
             } else {
                 // Percentuale - calcola rispetto al main layout
                 if (mainLayout.length && mainLayout.width() > 0) {
-                    const percentage = parseFloat(customWidth) / 100;
-                    return mainLayout.width() * percentage;
+                    const percentage = customWidth / 100;
+                    const calculatedWidth = mainLayout.width() * percentage;
+                    debugMessage('Applying percentage width', { 
+                        percentage: customWidth, 
+                        mainLayoutWidth: mainLayout.width(),
+                        calculatedWidth: calculatedWidth
+                    });
+                    return calculatedWidth;
+                } else {
+                    debugMessage('Main layout width not available, using fallback', null, 'warn');
+                    return 400; // Fallback
                 }
             }
         }
@@ -457,23 +555,25 @@ function getActualImageColumnWidthFromCSS() {
                     // **CORREZIONE: Considera la descrizione nel calcolo dell'altezza**
                     const availableHeight = `calc(100vh - ${fixedImageTopPosition}px - 20px)`;
                     
-                    const imageColumnStyles = {
+					const imageColumnStyles = {
                         'position': 'relative', // **INIZIA SEMPRE COME RELATIVE**
                         'left': '',
                         'top': '',
                         'width': imageColumnTargetWidthPx + 'px', 
                         'height': availableHeight,
-                        'max-width': 'none'
+                        'max-width': 'none',
+                        'flex-shrink': '0' // **PREVIENE IL RIMPICCIOLIMENTO**
                     };
 
                     const optionsColumnStyles = {
-                        'margin-left': imageColumnTargetWidthPx + 'px',
-                        'width': `calc(100% - ${imageColumnTargetWidthPx}px)`, 
+                        'margin-left': '0', // **RIMUOVI MARGIN-LEFT**
+                        'width': 'auto', // **LASCIA CHE FLEX GESTISCA LA LARGHEZZA**
                         'min-height': availableHeight, 
                         'position': 'relative', 
                         'top': '', 
                         'height': 'auto',
-                        'padding-top': ''
+                        'padding-top': '',
+                        'flex-grow': '1' // **USA FLEXBOX**
                     };
                     
                     debugMessage('Applying desktop vertical styles', {
@@ -726,23 +826,46 @@ function getActualImageColumnWidthFromCSS() {
                     
                     mainLayout.css(stickyStyles);
                     
+                    // **CORREZIONE LAYOUT STICKY - USA FLEXBOX**
+                    const imageColumnTargetWidthPx = getActualImageColumnWidthFromCSS();
+                    
+                    debugMessage('Sticky layout correction', {
+                        imageColumnTargetWidthPx,
+                        beforeImageColumnCSS: imageColumn.css(['width', 'margin-left', 'position']),
+                        beforeOptionsColumnCSS: optionsColumn.css(['width', 'margin-left', 'position'])
+                    });
+                    
                     imageColumn.css({
                         'position': 'relative',
                         'top': '',
                         'left': '',
-                        'width': '',
-                        'height': '',
-                        'margin-left': ''
+                        'width': imageColumnTargetWidthPx + 'px',
+                        'height': 'calc(100vh - 0px)',
+                        'margin-left': '0',
+                        'flex-shrink': '0' // **IMPEDISCE RIDIMENSIONAMENTO**
                     });
                     
                     optionsColumn.css({
                         'position': 'relative',
                         'top': '',
-                        'margin-left': '',
-                        'width': '',
-                        'height': '',
+                        'margin-left': '0', // **RIMUOVI MARGIN-LEFT**
+                        'width': 'auto', // **LASCIA CHE FLEX GESTISCA**
+                        'height': 'calc(100vh - 0px)',
                         'overflow-y': 'auto',
-                        'min-height': ''
+                        'min-height': '',
+                        'flex-grow': '1' // **PRENDE SPAZIO RIMANENTE**
+                    });
+                    
+                    debugMessage('Applied sticky layout correction', {
+                        imageColumnTargetWidthPx,
+                        afterImageColumnCSS: imageColumn.css(['width', 'margin-left', 'position', 'flex-shrink']),
+                        afterOptionsColumnCSS: optionsColumn.css(['width', 'margin-left', 'position', 'flex-grow'])
+                    }, 'success');
+                    
+                    debugMessage('Applied dynamic sticky layout', {
+                        imageColumnWidth: imageColumnTargetWidthPx,
+                        optionsColumnMarginLeft: imageColumnTargetWidthPx,
+                        optionsColumnWidth: `calc(100% - ${imageColumnTargetWidthPx}px)`
                     });
                 }
                 
@@ -823,7 +946,7 @@ function getActualImageColumnWidthFromCSS() {
         }
     }
     
-    function handleScrollMobile() {
+	function handleScrollMobile() {
         if (!imageColumn.length || !mainLayout.length) return;
         if ($(window).width() >= 768 || !layoutInitialized) { 
             if ($(window).width() >= 768 && layoutInitialized) {
@@ -841,12 +964,14 @@ function getActualImageColumnWidthFromCSS() {
         const imageColumnNaturalTopInDocument = mainLayout.offset().top; 
         const tabsOffsetTop = $tabsWrapper.length ? $tabsWrapper.offset().top : $(document).height();
         
-        debugMessage('Mobile scroll calculation', {
+        debugMessage('Mobile scroll calculation - CORRECTED', {
             scrollTop,
             adminBarHeight,
             mobileFixedTop,
             imageColumnNaturalTopInDocument,
-            tabsOffsetTop
+            tabsOffsetTop,
+            windowWidth: $(window).width(),
+            imageColumnCurrentCSS: imageColumn.css(['position', 'top', 'left', 'width', 'height', 'z-index'])
         });
         
         let imageEffectiveHeightForCalc;
@@ -854,53 +979,129 @@ function getActualImageColumnWidthFromCSS() {
             imageEffectiveHeightForCalc = imageColumn.find('.wss-image-container').outerHeight();
         } else {
             imageEffectiveHeightForCalc = parseFloat(imageColumn.css('height'));
-            if (isNaN(imageEffectiveHeightForCalc) || imageEffectiveHeightForCalc <=0 ) {
+            if (isNaN(imageEffectiveHeightForCalc) || imageEffectiveHeightForCalc <= 0) {
                 imageEffectiveHeightForCalc = $(window).height() * 0.6;
             }
         }
 
         const stickTriggerPoint = imageColumnNaturalTopInDocument - mobileFixedTop;
-        const unstickTriggerPoint = tabsOffsetTop - imageEffectiveHeightForCalc - mobileFixedTop - 20;
+        
+        // **CORREZIONE TRIGGER POINT**: Calcola basandoti sulla fine del contenuto
+        let unstickTriggerPoint;
+        if (tabsOffsetTop > imageColumnNaturalTopInDocument) {
+            // Caso normale: tabs dopo il configuratore
+            unstickTriggerPoint = tabsOffsetTop - imageEffectiveHeightForCalc - mobileFixedTop - 20;
+        } else {
+            // **CASO PROBLEMATICO**: tabs prima del configuratore - usa fine documento
+            unstickTriggerPoint = $(document).height() - imageEffectiveHeightForCalc - 100;
+        }
 
-        debugMessage('Mobile trigger points', {
+        debugMessage('Mobile trigger points - FIXED', {
             imageEffectiveHeightForCalc,
             stickTriggerPoint,
             unstickTriggerPoint,
+            tabsOffsetTop,
+            imageColumnNaturalTopInDocument,
+            documentHeight: $(document).height(),
             shouldStick: scrollTop > stickTriggerPoint,
-            shouldUnstick: scrollTop > unstickTriggerPoint && unstickTriggerPoint > 0
+            shouldUnstick: scrollTop > unstickTriggerPoint && unstickTriggerPoint > stickTriggerPoint,
+            triggerLogicValid: unstickTriggerPoint > stickTriggerPoint
         });
-
-        imageColumn.css({'max-width': 'none'}); 
 
         if (scrollTop > stickTriggerPoint) { 
             optionsColumn.css('padding-top', imageEffectiveHeightForCalc + 'px');
 
-            if (scrollTop > unstickTriggerPoint && unstickTriggerPoint > 0) { 
-                debugMessage('Mobile unstick position');
+            if (scrollTop > unstickTriggerPoint && unstickTriggerPoint > stickTriggerPoint) {
+                debugMessage('Mobile unstick position - FIXED');
+                
+                // **CORREZIONE**: Calcola posizione relativa al main layout, non assoluta
+                let relativeTop;
+                if (tabsOffsetTop > imageColumnNaturalTopInDocument) {
+                    relativeTop = tabsOffsetTop - imageColumnNaturalTopInDocument - imageEffectiveHeightForCalc - 20;
+                } else {
+                    // Se tabs sono sopra, posiziona alla fine del main layout
+                    relativeTop = mainLayout.height() - imageEffectiveHeightForCalc;
+                }
+                
+                // **ASSICURA CHE NON SIA NEGATIVO**
+                relativeTop = Math.max(0, relativeTop);
+                
                 imageColumn.css({
                     'position': 'absolute',
-                    'top': (tabsOffsetTop - imageColumnNaturalTopInDocument - imageEffectiveHeightForCalc - 20) + 'px',
-                    'left': '0', 'width': '100%', 'z-index': '10',
-                    'height': imageOrientation === 'horizontal' ? 'auto' : imageEffectiveHeightForCalc + 'px', 
+                    'top': relativeTop + 'px',
+                    'left': '0', 
+                    'right': '0',
+                    'width': 'auto',
+                    'z-index': '1000',
+                    'height': imageOrientation === 'horizontal' ? 'auto' : imageEffectiveHeightForCalc + 'px',
+                    'max-width': 'none',
+                    'margin-left': '0',
+                    'margin-right': '0'
+                });
+                
+                debugMessage('Applied mobile unstick styles - FIXED', {
+                    position: 'absolute',
+                    calculatedTop: relativeTop,
+                    finalTop: relativeTop,
+                    height: imageEffectiveHeightForCalc,
+                    tabsOffsetTop,
+                    imageColumnNaturalTopInDocument,
+                    mainLayoutHeight: mainLayout.height()
                 });
             } else { 
-                debugMessage('Mobile fixed position');
+                debugMessage('Mobile fixed position - FIXED');
+                
+                debugMessage('Applied mobile unstick styles', {
+                    position: 'absolute',
+                    top: absoluteTop,
+                    height: imageEffectiveHeightForCalc
+                });
+            } else { 
+                debugMessage('Mobile fixed position - CORRECTED');
+                const mainLayoutOffset = mainLayout.offset();
+                const mainLayoutWidth = mainLayout.width();
+                
                 imageColumn.css({
-                    'position': 'fixed', 'top': mobileFixedTop + 'px',
-                    'left': mainLayout.offset().left + 'px', 
-                    'width': mainLayout.width() + 'px',    
+                    'position': 'fixed', 
+                    'top': mobileFixedTop + 'px',
+                    'left': mainLayoutOffset.left + 'px', 
+                    'right': 'auto', // **SPECIFICA right**
+                    'width': mainLayoutWidth + 'px',    
                     'height': imageOrientation === 'horizontal' ? 'auto' : imageEffectiveHeightForCalc + 'px', 
-                    'z-index': '1000' 
+                    'z-index': '1000', // **Z-INDEX ALTO**
+                    'max-width': 'none',
+                    'margin-left': '0', // **RIMUOVI QUALSIASI MARGIN**
+                    'margin-right': '0',
+                    'background-color': '#fff' // **AGGIUNTO BACKGROUND**
+                });
+                
+                debugMessage('Applied mobile fixed styles', {
+                    position: 'fixed',
+                    top: mobileFixedTop,
+                    left: mainLayoutOffset.left,
+                    width: mainLayoutWidth,
+                    height: imageEffectiveHeightForCalc,
+                    zIndex: 1000
                 });
             }
         } else { 
-            debugMessage('Mobile normal position');
+            debugMessage('Mobile normal position - CORRECTED');
             optionsColumn.css('padding-top', '');
             imageColumn.css({
-                'position': 'relative', 'top': '', 'left': '', 'width': '100%', 'z-index': '10',
+                'position': 'relative', 
+                'top': '', 
+                'left': '', 
+                'right': '', // **RIMUOVI RIGHT**
+                'width': '100%', 
+                'z-index': '10',
                 'height': '',
-                'max-width': '' 
+                'max-width': '',
+                'margin-left': '', // **RIPRISTINA MARGIN**
+                'margin-right': '',
+                'background-color': '' // **RIMUOVI BACKGROUND**
             });
+            
+            debugMessage('Applied mobile normal styles');
         }
     }
 
