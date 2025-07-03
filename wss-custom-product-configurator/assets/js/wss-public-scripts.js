@@ -33,8 +33,17 @@ jQuery(document).ready(function($) {
     const $siteHeader = $('header.site-header'); 
     const $wpAdminBar = $('#wpadminbar');
     const $tabsWrapper = $('.woocommerce-tabs.wc-tabs-wrapper');
+    const $descriptionFull = $('.wss-configurator-description-full');
 
-    // INSERISCI QUI LA NUOVA FUNZIONE - DOPO LE VARIABILI E PRIMA DI calculateFixedImageTop
+    // **NUOVE VARIABILI PER GESTIRE LO STATO**
+    let layoutInitialized = false;
+    let isAdjusting = false;
+    let adjustLayoutTimer = null;
+	let scrollTimer = null;
+
+    let frozenTriggerPoints = null;
+    let isStickyActive = false;
+	
     function calculateRotatedImageDimensions() {
         if (imageOrientation !== 'horizontal') return;
         
@@ -47,11 +56,7 @@ jQuery(document).ready(function($) {
         const containerWidth = $container.width();
         
         if (isMobile) {
-            // Su mobile, lasciamo che il CSS gestisca le proporzioni con aspect-ratio
-            // Calcoliamo solo le dimensioni dell'immagine per riempire il contenitore
             const containerHeight = $container.height();
-            
-            // L'immagine ruotata deve riempire il contenitore 3:1
             const imageWidth = containerHeight;
             const imageHeight = containerWidth;
             
@@ -65,7 +70,6 @@ jQuery(document).ready(function($) {
                 'height': imageHeight + 'px'
             });
         } else {
-            // Desktop: manteniamo il comportamento esistente
             const maxAllowedHeight = $(window).height() * 0.7;
             
             let imageHeight = containerWidth;
@@ -96,21 +100,36 @@ jQuery(document).ready(function($) {
     function calculateFixedImageTop() {
         const adminBarHeight = $wpAdminBar.length && $wpAdminBar.is(':visible') ? $wpAdminBar.outerHeight() : 0;
         let siteHeaderHeight = 0;
+        
+        // **CORREZIONE**: Calcolo più preciso dell'header
         if ($siteHeader.length && $siteHeader.is(':visible')) {
-            let isHeaderEffectivelyFixed = ($siteHeader.css('position') === 'fixed' || $siteHeader.css('position') === 'sticky');
-            if (isHeaderEffectivelyFixed && $siteHeader.offset().top <= $(window).scrollTop() + adminBarHeight) {
-                 siteHeaderHeight = $siteHeader.outerHeight();
-            } else if (!isHeaderEffectivelyFixed && $(window).scrollTop() < $siteHeader.outerHeight()) { 
-                siteHeaderHeight = $siteHeader.outerHeight() - $(window).scrollTop();
-                if (siteHeaderHeight < 0) siteHeaderHeight = 0;
+            const headerPosition = $siteHeader.css('position');
+            const isHeaderFixed = (headerPosition === 'fixed' || headerPosition === 'sticky');
+            
+            if (isHeaderFixed) {
+                siteHeaderHeight = $siteHeader.outerHeight();
+            } else {
+                const scrollTop = $(window).scrollTop();
+                const headerBottom = $siteHeader.offset().top + $siteHeader.outerHeight();
+                if (headerBottom > scrollTop) {
+                    siteHeaderHeight = Math.max(0, headerBottom - scrollTop);
+                }
             }
         }
+        
+        // **CORREZIONE**: Considera anche la descrizione full-width
+        let descriptionHeight = 0;
+        if (imageOrientation === 'vertical' && $descriptionFull.length && $descriptionFull.is(':visible')) {
+            descriptionHeight = $descriptionFull.outerHeight();
+        }
+        
         fixedImageTopPosition = adminBarHeight + siteHeaderHeight;
+        return { fixedImageTopPosition, descriptionHeight };
     }
     
     function getActualImageColumnWidthFromCSS() {
         if (imageOrientation === 'horizontal') {
-            return '100%'; // Per orientamento orizzontale, sempre 100%
+            return '100%';
         }
         
         const originalInlineStyle = imageColumn.attr('style') || "";
@@ -143,18 +162,27 @@ jQuery(document).ready(function($) {
         return calculatedWidthInPx;
     }
 
-    let initialLayoutAdjusted = false; 
-
+    // **FUNZIONE PRINCIPALE CORRETTA**
     function adjustLayout(isInitialCall = false) {
-        if (!mainLayout.length || !imageColumn.length || !optionsColumn.length) return;
+        // **PREVENZIONE RACE CONDITIONS**
+        if (isAdjusting && !isInitialCall) {
+            return;
+        }
+        
+        isAdjusting = true;
+        
+        if (!mainLayout.length || !imageColumn.length || !optionsColumn.length) {
+            isAdjusting = false;
+            return;
+        }
 
         const windowWidth = $(window).width();
-        calculateFixedImageTop(); 
+        const { fixedImageTopPosition: topPos, descriptionHeight } = calculateFixedImageTop();
+        fixedImageTopPosition = topPos;
 
         if (imageOrientation === 'horizontal') {
-            // Layout orizzontale
+            // Layout orizzontale (invariato)
             if (windowWidth >= 768) {
-                // Desktop orizzontale
                 imageColumn.css({
                     'position': 'relative',
                     'width': '100%',
@@ -174,10 +202,8 @@ jQuery(document).ready(function($) {
                     'padding-top': ''
                 });
                 
-                // AGGIUNGI QUESTA CHIAMATA DOPO AVER IMPOSTATO IL LAYOUT
                 setTimeout(calculateRotatedImageDimensions, 50);
             } else {
-                // Mobile orizzontale
                 imageColumn.css({ 
                     'position': 'relative',
                     'left': '',
@@ -195,70 +221,104 @@ jQuery(document).ready(function($) {
                     'padding-top': ''
                 });
                 
-                // AGGIUNGI ANCHE QUI PER MOBILE
                 setTimeout(calculateRotatedImageDimensions, 50);
             }
         } else {
-            // Layout verticale (comportamento originale)
+            // **LAYOUT VERTICALE CORRETTO**
             if (windowWidth >= 768) { 
-                const mainLayoutOffsetLeft = mainLayout.offset().left;
+                // **ASPETTA CHE TUTTI GLI ELEMENTI SIANO MISURABILI**
+                const mainLayoutOffset = mainLayout.offset();
+                if (!mainLayoutOffset || mainLayoutOffset.top === 0) {
+                    if (isInitialCall) {
+                        setTimeout(() => adjustLayout(true), 100);
+                    }
+                    isAdjusting = false;
+                    return;
+                }
+                
+                const mainLayoutOffsetLeft = mainLayoutOffset.left;
                 const imageColumnTargetWidthPx = getActualImageColumnWidthFromCSS();
                 
                 if (imageColumnTargetWidthPx > 0) { 
+                    // **CORREZIONE**: Considera la descrizione nel calcolo dell'altezza
+                    const availableHeight = `calc(100vh - ${fixedImageTopPosition}px - 20px)`;
+                    
                     imageColumn.css({
-                        'left': mainLayoutOffsetLeft + 'px',
-                        'top': fixedImageTopPosition + 'px',
+                        'position': 'relative', // **INIZIA SEMPRE COME RELATIVE**
+                        'left': '',
+                        'top': '',
                         'width': imageColumnTargetWidthPx + 'px', 
-                        'height': `calc(100vh - ${fixedImageTopPosition}px - 20px)`,
+                        'height': availableHeight,
+                        'max-width': 'none'
                     });
 
                     optionsColumn.css({
                         'margin-left': imageColumnTargetWidthPx + 'px',
                         'width': `calc(100% - ${imageColumnTargetWidthPx}px)`, 
-                        'min-height': `calc(100vh - ${fixedImageTopPosition}px - 20px)`, 
-                        'position': 'relative', 'top': '', 'height': 'auto',
+                        'min-height': availableHeight, 
+                        'position': 'relative', 
+                        'top': '', 
+                        'height': 'auto',
                         'padding-top': ''
                     });
                 } else if (isInitialCall) {
-                    setTimeout(function() { adjustLayout(true); }, 350); 
+                    setTimeout(() => adjustLayout(true), 200); 
+                    isAdjusting = false;
                     return; 
                 }
                 
             } else { // Mobile
                 imageColumn.css({ 
-                    'position': 'relative', 'left': '', 'top': '',
-                    'width': '100%', 'height': '',
-                    'margin-left': '', 'max-width': 'none'
+                    'position': 'relative', 
+                    'left': '', 
+                    'top': '',
+                    'width': '100%', 
+                    'height': '',
+                    'margin-left': '', 
+                    'max-width': 'none'
                 });
                 optionsColumn.css({
-                    'margin-left': '', 'width': '100%',
-                    'min-height': '', 'height': 'auto',
+                    'margin-left': '', 
+                    'width': '100%',
+                    'min-height': '', 
+                    'height': 'auto',
                     'padding-top': ''
                 });
             }
         }
         
         if (isInitialCall) {
-            initialLayoutAdjusted = true;
+            layoutInitialized = true;
         }
+        
+        isAdjusting = false;
     }
 
     let lastKnownImageColumnWidthForAbsolute = 0; 
 
-    function handleScrollDesktop() {
+	function handleScrollDesktop() {
         if (!imageColumn.length || !optionsColumn.length || !mainLayout.length) return;
-        if ($(window).width() < 768 || !initialLayoutAdjusted) return; 
+        if ($(window).width() < 768 || !layoutInitialized) return; 
 
-        calculateFixedImageTop(); 
+        const { fixedImageTopPosition: topPos, descriptionHeight } = calculateFixedImageTop();
+        fixedImageTopPosition = topPos;
         const scrollTop = $(window).scrollTop();
         
+        // **DEBUG MIGLIORATO**
+        console.log('WSS Debug: handleScrollDesktop called', {
+            scrollTop: scrollTop,
+            fixedImageTopPosition: fixedImageTopPosition,
+            descriptionHeight: descriptionHeight,
+            imageOrientation: imageOrientation,
+            isStickyActive: isStickyActive
+        });
+        
         if (imageOrientation === 'horizontal') {
-            // Comportamento scroll per orientamento orizzontale
+            // Comportamento scroll per orientamento orizzontale (invariato)
             const imageColumnOriginalOffset = mainLayout.offset().top;
             const imageColumnHeight = imageColumn.outerHeight();
             
             if (scrollTop > imageColumnOriginalOffset - fixedImageTopPosition) {
-                // Fissa l'immagine
                 productContainer.addClass('wss-image-fixed');
                 imageColumn.css({
                     'position': 'fixed',
@@ -269,10 +329,8 @@ jQuery(document).ready(function($) {
                     'z-index': '1000'
                 });
                 
-                // Aggiungi padding-top alle opzioni per compensare
                 optionsColumn.css('padding-top', imageColumnHeight + 'px');
             } else {
-                // Rimuovi fixed
                 productContainer.removeClass('wss-image-fixed');
                 imageColumn.css({
                     'position': 'relative',
@@ -285,72 +343,167 @@ jQuery(document).ready(function($) {
                 optionsColumn.css('padding-top', '');
             }
         } else {
-            // Comportamento originale per orientamento verticale
-            const mainLayoutOffsetTop = mainLayout.offset().top;
-            const tabsOffsetTop = $tabsWrapper.length ? $tabsWrapper.offset().top : $(document).height();
-            const imageColumnHeight = imageColumn.outerHeight();
+            // **COMPORTAMENTO VERTICALE CON TRIGGER POINTS CONGELATI**
             
-            const targetImageContentWidth = getActualImageColumnWidthFromCSS();
-            const imageColumnLeftPosition = mainLayout.offset().left + 'px';
-
-            const unstickPoint = tabsOffsetTop - imageColumnHeight - fixedImageTopPosition - 20; 
-            const restickPoint = mainLayoutOffsetTop - fixedImageTopPosition; 
-            
-            const currentImageColumnPosition = imageColumn.css('position');
-
-            if (currentImageColumnPosition === 'fixed') {
-                lastKnownImageColumnWidthForAbsolute = imageColumn.width(); 
+            // **CALCOLA I TRIGGER POINTS SOLO SE NON SONO CONGELATI**
+            if (!frozenTriggerPoints || !isStickyActive) {
+                const mainLayoutOffsetTop = mainLayout.offset().top;
+                const tabsOffsetTop = $tabsWrapper.length ? $tabsWrapper.offset().top : $(document).height();
+                const baseImageContainer = imageColumn.find('.wss-image-container');
+                const imageContainerTop = baseImageContainer.offset() ? baseImageContainer.offset().top : mainLayoutOffsetTop;
                 
-                if (Math.abs(imageColumn.width() - targetImageContentWidth) > 1) {
-                    imageColumn.css('width', targetImageContentWidth + 'px');
+                const stickyTriggerPoint = imageContainerTop - fixedImageTopPosition;
+                const optionsColumnHeight = optionsColumn[0].scrollHeight;
+                const viewportHeight = $(window).height() - fixedImageTopPosition;
+                
+                let unstickyTriggerPoint = tabsOffsetTop - viewportHeight - 50;
+                const needsInternalScroll = optionsColumnHeight > viewportHeight;
+                
+                if (needsInternalScroll) {
+                    const maxInternalScroll = optionsColumnHeight - viewportHeight;
+                    unstickyTriggerPoint = stickyTriggerPoint + maxInternalScroll + viewportHeight + 100;
                 }
-                if (imageColumn.css('left') !== imageColumnLeftPosition) {
-                    imageColumn.css('left', imageColumnLeftPosition);
+                
+                if (unstickyTriggerPoint <= stickyTriggerPoint) {
+                    unstickyTriggerPoint = stickyTriggerPoint + viewportHeight + 200;
                 }
-                if (imageColumn.css('top') !== fixedImageTopPosition + 'px') {
-                    imageColumn.css('top', fixedImageTopPosition + 'px');
-                }
-                const targetHeightFixed = `calc(100vh - ${fixedImageTopPosition}px - 20px)`;
-                if(imageColumn.css('height') !== targetHeightFixed) {
-                    imageColumn.css('height', targetHeightFixed);
-                }
+                
+                // **CONGELA I TRIGGER POINTS**
+                frozenTriggerPoints = {
+                    stickyTriggerPoint: stickyTriggerPoint,
+                    unstickyTriggerPoint: unstickyTriggerPoint,
+                    viewportHeight: viewportHeight,
+                    optionsColumnHeight: optionsColumnHeight,
+                    needsInternalScroll: needsInternalScroll
+                };
+                
+                console.log('WSS Debug: Trigger calculations (FROZEN)', {
+                    stickyTriggerPoint: stickyTriggerPoint,
+                    unstickyTriggerPoint: unstickyTriggerPoint,
+                    scrollTop: scrollTop,
+                    needsSticky: scrollTop > stickyTriggerPoint,
+                    shouldBeSticky: scrollTop > stickyTriggerPoint && scrollTop < unstickyTriggerPoint,
+                    viewportHeight: viewportHeight,
+                    optionsColumnHeight: optionsColumnHeight,
+                    needsInternalScroll: needsInternalScroll
+                });
             }
-
-            if (scrollTop > unstickPoint && unstickPoint > restickPoint) { 
-                if (currentImageColumnPosition !== 'absolute') { 
-                    if (lastKnownImageColumnWidthForAbsolute === 0 || Math.abs(imageColumn.width() - lastKnownImageColumnWidthForAbsolute) > 1) {
-                        lastKnownImageColumnWidthForAbsolute = imageColumn.width();
+            
+            // **USA I TRIGGER POINTS CONGELATI**
+            const triggerData = frozenTriggerPoints;
+            
+            // **GESTIONE STATI CON TRIGGER STABILI**
+            if (scrollTop > triggerData.stickyTriggerPoint && scrollTop < triggerData.unstickyTriggerPoint) {
+                console.log('WSS Debug: Should be sticky');
+                
+                // **STATO STICKY**
+                if (!isStickyActive) {
+                    console.log('WSS Debug: Activating sticky mode');
+                    isStickyActive = true;
+                    
+                    productContainer.addClass('wss-sticky-container');
+                    
+                    if (!$('.wss-sticky-spacer').length) {
+                        productContainer.after('<div class="wss-sticky-spacer"></div>');
                     }
-                    imageColumn.css({
-                        'position': 'absolute',
-                        'top': (tabsOffsetTop - mainLayoutOffsetTop - imageColumnHeight - 20) + 'px',
-                        'left': '0px', 
-                        'width': lastKnownImageColumnWidthForAbsolute + 'px', 
-                        'height': imageColumnHeight + 'px' 
-                    });
-                } else { 
-                     if (Math.abs(imageColumn.width() - lastKnownImageColumnWidthForAbsolute) > 1) {
-                        imageColumn.css('width', lastKnownImageColumnWidthForAbsolute + 'px');
-                     }
-                }
-            } else { 
-                if (currentImageColumnPosition !== 'fixed') { 
-                    imageColumn.css({
+                    
+                    mainLayout.css({
                         'position': 'fixed',
                         'top': fixedImageTopPosition + 'px',
-                        'left': imageColumnLeftPosition,
-                        'width': targetImageContentWidth + 'px', 
-                        'height': `calc(100vh - ${fixedImageTopPosition}px - 20px)`
+                        'left': '0',
+                        'right': '0',
+                        'width': '100%',
+                        'height': `calc(100vh - ${fixedImageTopPosition}px)`,
+                        'z-index': '1000',
+                        'background': '#fff'
                     });
-                } 
+                    
+                    imageColumn.css({
+                        'position': 'relative',
+                        'top': '',
+                        'left': '',
+                        'width': '',
+                        'height': '',
+                        'margin-left': ''
+                    });
+                    
+                    optionsColumn.css({
+                        'position': 'relative',
+                        'top': '',
+                        'margin-left': '',
+                        'width': '',
+                        'height': '',
+                        'overflow-y': 'auto',
+                        'min-height': ''
+                    });
+                }
+                
+                // **GESTIONE SCROLL INTERNO**
+                if (triggerData.needsInternalScroll) {
+                    const internalScrollProgress = scrollTop - triggerData.stickyTriggerPoint;
+                    const maxInternalScroll = triggerData.optionsColumnHeight - triggerData.viewportHeight + 40;
+                    const clampedInternalScroll = Math.min(internalScrollProgress, maxInternalScroll);
+                    
+                    optionsColumn.scrollTop(clampedInternalScroll);
+                }
+                
+            } else if (scrollTop >= triggerData.unstickyTriggerPoint) {
+                console.log('WSS Debug: Should unstick (bottom)');
+                
+                if (isStickyActive) {
+                    isStickyActive = false;
+                    frozenTriggerPoints = null; // **RESET TRIGGER POINTS**
+                    
+                    productContainer.removeClass('wss-sticky-container');
+                    $('.wss-sticky-spacer').remove();
+                    
+                    const finalTopPosition = triggerData.unstickyTriggerPoint - triggerData.stickyTriggerPoint + triggerData.viewportHeight;
+                    
+                    mainLayout.css({
+                        'position': 'absolute',
+                        'top': finalTopPosition + 'px',
+                        'left': '0',
+                        'right': '',
+                        'width': '100%',
+                        'height': 'auto',
+                        'z-index': ''
+                    });
+                    
+                    optionsColumn.scrollTop(optionsColumn[0].scrollHeight);
+                }
+                
+            } else {
+                console.log('WSS Debug: Should be normal (before sticky)');
+                
+                if (isStickyActive) {
+                    isStickyActive = false;
+                    frozenTriggerPoints = null; // **RESET TRIGGER POINTS**
+                    
+                    productContainer.removeClass('wss-sticky-container');
+                    $('.wss-sticky-spacer').remove();
+                    
+                    mainLayout.css({
+                        'position': '',
+                        'top': '',
+                        'left': '',
+                        'right': '',
+                        'width': '',
+                        'height': '',
+                        'z-index': '',
+                        'background': ''
+                    });
+                    
+                    adjustLayout();
+                    optionsColumn.scrollTop(0);
+                }
             }
         }
     }
     
     function handleScrollMobile() {
         if (!imageColumn.length || !mainLayout.length) return;
-        if ($(window).width() >= 768 || !initialLayoutAdjusted) { 
-            if ($(window).width() >= 768 && initialLayoutAdjusted) {
+        if ($(window).width() >= 768 || !layoutInitialized) { 
+            if ($(window).width() >= 768 && layoutInitialized) {
                 imageColumn.css({'height': '', 'max-height': '', 'min-height': ''}); 
                 optionsColumn.css({'padding-top': ''});
                 adjustLayout(); 
@@ -365,7 +518,6 @@ jQuery(document).ready(function($) {
         const imageColumnNaturalTopInDocument = mainLayout.offset().top; 
         const tabsOffsetTop = $tabsWrapper.length ? $tabsWrapper.offset().top : $(document).height();
         
-        // Per layout orizzontale, usa l'altezza effettiva del contenitore
         let imageEffectiveHeightForCalc;
         if (imageOrientation === 'horizontal') {
             imageEffectiveHeightForCalc = imageColumn.find('.wss-image-container').outerHeight();
@@ -405,12 +557,20 @@ jQuery(document).ready(function($) {
             imageColumn.css({
                 'position': 'relative', 'top': '', 'left': '', 'width': '100%', 'z-index': '10',
                 'height': '',
-                'max-height': '' 
+                'max-width': '' 
             });
         }
     }
 
-    // --- Funzioni Core ---
+    // **DEBOUNCED ADJUST LAYOUT**
+    function debouncedAdjustLayout(isInitial = false) {
+        clearTimeout(adjustLayoutTimer);
+        adjustLayoutTimer = setTimeout(() => {
+            adjustLayout(isInitial);
+        }, isInitial ? 50 : 150);
+    }
+
+    // --- Funzioni Core (invariate) ---
     function initializeConfigurator() {
         if (!productConfig || !productConfig.characteristics) { return; }
         productConfig.characteristics.forEach(char => { 
@@ -473,7 +633,6 @@ jQuery(document).ready(function($) {
             }); 
         }
         
-        // AGGIUNGI QUESTA CHIAMATA QUANDO L'IMMAGINE CAMBIA
         if (imageOrientation === 'horizontal') {
             setTimeout(calculateRotatedImageDimensions, 100);
         }
@@ -481,51 +640,139 @@ jQuery(document).ready(function($) {
     
     function applyAllDependencies() { let changedByDependency = false; form.find('.wss-option-item, option[data-dependency-char]').each(function() { const $optionElement = $(this); const depCharSlug = $optionElement.data('dependency-char'); const depOptValue = String($optionElement.data('dependency-val')); if (depCharSlug && typeof $optionElement.data('dependency-val') !== 'undefined') { let isDependencyMet = false; const actualSelectedValueForDepChar = currentSelections[depCharSlug]; if (typeof actualSelectedValueForDepChar !== 'undefined' && actualSelectedValueForDepChar !== null && actualSelectedValueForDepChar !== '') { if (Array.isArray(actualSelectedValueForDepChar)) { if (actualSelectedValueForDepChar.includes(depOptValue)) { isDependencyMet = true; } } else { if (String(actualSelectedValueForDepChar) === depOptValue) { isDependencyMet = true; } } } const wasPreviouslyHidden = $optionElement.hasClass('wss-element-hidden'); if (isDependencyMet) { if(wasPreviouslyHidden) { $optionElement.removeClass('wss-element-hidden'); changedByDependency = true; } if ($optionElement.is('option')) $optionElement.prop('disabled', false); } else { if(!wasPreviouslyHidden) { $optionElement.addClass('wss-element-hidden'); changedByDependency = true; } else { $optionElement.addClass('wss-element-hidden'); } if ($optionElement.is('option')) { $optionElement.prop('disabled', true); if ($optionElement.is(':selected')) { $optionElement.parent('select').val(''); } } else if ($optionElement.find('input.wss-option-selector').is(':checked')) { $optionElement.find('input.wss-option-selector').prop('checked', false); const checkboxCharSlug = $optionElement.closest('.wss-characteristic-group').data('char-slug'); const checkboxValue = $optionElement.find('input.wss-option-selector').val(); if (currentSelections[checkboxCharSlug]) { if (Array.isArray(currentSelections[checkboxCharSlug])) { currentSelections[checkboxCharSlug] = currentSelections[checkboxCharSlug].filter(v => v !== checkboxValue); } else if (currentSelections[checkboxCharSlug] === checkboxValue) { currentSelections[checkboxCharSlug] = ''; } } } } } }); return changedByDependency; }
     
+// **INIZIALIZZAZIONE CORRETTA CON DEBUG**
     if (configuratorWrapper.length && productConfig && productConfig.characteristics) {
         initializeConfigurator(); 
         
-        // AGGIUNGI QUESTO EVENT LISTENER PER QUANDO L'IMMAGINE BASE VIENE CARICATA
         baseImageElem.on('load', function() {
             if (imageOrientation === 'horizontal') {
                 calculateRotatedImageDimensions();
             }
         });
         
-        $(window).on('load', function() {
-            setTimeout(function() { 
-                adjustLayout(true); 
-                if ($(window).width() >= 768) { handleScrollDesktop(); } else { handleScrollMobile(); }
+        // **VARIABILI PER DEBUG E CONTROLLO**
+        let initAttempts = 0;
+        const maxInitAttempts = 10;
+        
+        // **FUNZIONE DI INIZIALIZZAZIONE ROBUSTA**
+        function robustInitialization() {
+            initAttempts++;
+            
+            console.log(`WSS Debug: Init attempt ${initAttempts}`, {
+                windowWidth: $(window).width(),
+                mainLayoutExists: mainLayout.length > 0,
+                mainLayoutOffset: mainLayout.length > 0 ? mainLayout.offset() : null,
+                imageOrientation: imageOrientation,
+                layoutInitialized: layoutInitialized
+            });
+            
+            // Verifica che tutti gli elementi essenziali siano pronti
+            if (mainLayout.length === 0 || !mainLayout.offset() || mainLayout.offset().top === 0) {
+                if (initAttempts < maxInitAttempts) {
+                    setTimeout(robustInitialization, 200);
+                    return;
+                }
+            }
+            
+            // Esegui layout iniziale
+            debouncedAdjustLayout(true);
+            
+            // Verifica che il layout sia stato applicato correttamente
+            setTimeout(function() {
+                const afterLayoutCheck = {
+                    layoutInitialized: layoutInitialized,
+                    mainLayoutOffset: mainLayout.offset(),
+                    imageColumnPosition: imageColumn.css('position'),
+                    optionsColumnMargin: optionsColumn.css('margin-left')
+                };
                 
-                setTimeout(function() { 
-                    adjustLayout(true);
-                    if ($(window).width() >= 768) { handleScrollDesktop(); } else { handleScrollMobile(); }
-                }, 400); 
-            }, 150); 
+                console.log('WSS Debug: After layout check', afterLayoutCheck);
+                
+                // **FORZA ATTIVAZIONE SCROLL HANDLER**
+                $(window).off('scroll.wss').on('scroll.wss', function() {
+                    if (!layoutInitialized) return;
+                    
+                    clearTimeout(scrollTimer);
+                    scrollTimer = setTimeout(function() {
+                        console.log('WSS Debug: Scroll handler triggered', {
+                            scrollTop: $(window).scrollTop(),
+                            windowWidth: $(window).width(),
+                            imageOrientation: imageOrientation
+                        });
+                        
+                        if ($(window).width() >= 768) {
+                            handleScrollDesktop();
+                        } else {
+                            handleScrollMobile();
+                        }
+                    }, 16);
+                });
+                
+                // **TEST IMMEDIATO DELLO SCROLL**
+                if ($(window).scrollTop() > 0) {
+                    console.log('WSS Debug: Page already scrolled, triggering handler');
+                    if ($(window).width() >= 768) {
+                        handleScrollDesktop();
+                    } else {
+                        handleScrollMobile();
+                    }
+                }
+                
+            }, 300);
+        }
+        
+        // **SEQUENZA DI INIZIALIZZAZIONE MULTIPLA**
+        
+        // 1. Primo tentativo al DOM ready (già siamo qui)
+        setTimeout(robustInitialization, 100);
+        
+        // 2. Secondo tentativo al window.load
+        $(window).on('load.wss', function() {
+            console.log('WSS Debug: Window load event');
+            setTimeout(robustInitialization, 200);
         });
         
+        // 3. Terzo tentativo con delay maggiore (per contenuti dinamici)
+        setTimeout(function() {
+            console.log('WSS Debug: Delayed initialization attempt');
+            robustInitialization();
+        }, 1000);
+        
+        // **RESIZE HANDLER MIGLIORATO CON DEBUG**
         let resizeTimer;
-        $(window).on('resize', function() {
+        $(window).off('resize.wss').on('resize.wss', function() {
+            console.log('WSS Debug: Window resize');
             clearTimeout(resizeTimer);
             resizeTimer = setTimeout(function() {
-                adjustLayout(true); 
-                if ($(window).width() >= 768) { handleScrollDesktop(); } else { handleScrollMobile(); }
-                // AGGIUNGI QUESTA CHIAMATA AL RESIZE
-                if (imageOrientation === 'horizontal') {
-                    calculateRotatedImageDimensions();
-                }
-            }, 150); 
+                layoutInitialized = false;
+                debouncedAdjustLayout(true);
+                
+                setTimeout(function() {
+                    if ($(window).width() >= 768) {
+                        handleScrollDesktop();
+                    } else {
+                        handleScrollMobile();
+                    }
+                    
+                    if (imageOrientation === 'horizontal') {
+                        calculateRotatedImageDimensions();
+                    }
+                }, 200);
+            }, 250); 
         });
 
-        let scrollTimer; 
-        $(window).on('scroll', function() {
-            clearTimeout(scrollTimer);
-            scrollTimer = setTimeout(function() {
-                if ($(window).width() >= 768) {
-                    handleScrollDesktop();
-                } else {
-                    handleScrollMobile();
-                }
-            }, 30); 
+        // **HANDLER PER CAMBIO ORIENTAMENTO MOBILE**
+        $(window).on('orientationchange.wss', function() {
+            console.log('WSS Debug: Orientation change');
+            setTimeout(robustInitialization, 500);
         });
+        
+        // **FALLBACK PER TEMI CHE MODIFICANO IL DOM DOPO IL LOAD**
+        setTimeout(function() {
+            if (!layoutInitialized) {
+                console.log('WSS Debug: Final fallback initialization');
+                robustInitialization();
+            }
+        }, 2000);
     }
 });

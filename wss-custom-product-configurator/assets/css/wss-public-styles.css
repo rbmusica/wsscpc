@@ -190,3 +190,75 @@
 }
 
 .wss-element-hidden { display: none !important; }
+
+Perfetto! Hai ragione, serve un approccio completamente diverso. Creiamo un contenitore sticky unificato che gestisce immagine + opzioni insieme, con scroll interno per le opzioni.
+Soluzione: Contenitore Sticky Unificato
+File: assets/css/wss-public-styles.css
+Aggiungi queste regole CSS alla fine del file (dopo la riga con /* Descrizione a tutta larghezza nel layout verticale */):
+css/* Descrizione a tutta larghezza nel layout verticale */
+@media (min-width: 768px){
+    .wss-orientation-vertical .wss-configurator-description-full{
+        max-width:1300px;
+        margin:0 auto 35px;
+        padding:0 25px;
+    }
+    .wss-orientation-vertical .wss-configurator-main-layout{
+        clear:both;
+    }
+}
+
+/* **NUOVE REGOLE PER CONTENITORE STICKY UNIFICATO** */
+@media (min-width: 768px) {
+    /* Quando il contenitore principale diventa sticky */
+    .wss-orientation-vertical.wss-sticky-container .wss-configurator-main-layout {
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: 100% !important;
+        height: 100vh !important;
+        z-index: 1000;
+        background: #fff;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    /* Layout interno quando sticky */
+    .wss-orientation-vertical.wss-sticky-container .wss-configurator-image-column {
+        position: relative !important;
+        width: 50% !important;
+        max-width: 650px !important;
+        height: 100vh !important;
+        left: auto !important;
+        top: auto !important;
+        margin-left: 0 !important;
+    }
+    
+    .wss-orientation-vertical.wss-sticky-container .wss-configurator-options-column {
+        position: relative !important;
+        width: 50% !important;
+        margin-left: 50% !important;
+        height: 100vh !important;
+        overflow-y: auto !important;
+        padding: 20px 25px !important;
+        box-sizing: border-box;
+    }
+    
+    /* Compensazione per il body quando container è sticky */
+    .wss-orientation-vertical.wss-sticky-container ~ .wss-sticky-spacer {
+        height: 100vh;
+        width: 100%;
+    }
+}
+
+/* Responsive per schermi medi */
+@media (min-width: 768px) and (max-width: 1199.98px) {
+    .wss-orientation-vertical.wss-sticky-container .wss-configurator-image-column {
+        width: 40% !important;
+        max-width: none !important;
+    }
+    
+    .wss-orientation-vertical.wss-sticky-container .wss-configurator-options-column {
+        width: 60% !important;
+        margin-left: 40% !important;
+    }
+}

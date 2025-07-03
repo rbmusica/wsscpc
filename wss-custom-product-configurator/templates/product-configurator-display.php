@@ -47,7 +47,22 @@ if ( post_password_required() ) {
 <div id="product-<?php echo esc_attr($product_id); /* Usiamo ID prodotto per unicità */ ?>" <?php wc_product_class( 'wss-product-configurator-container wss-orientation-' . esc_attr($image_orientation), $product ); ?>>
     
     <div id="wss-product-configurator-<?php echo esc_attr( $product_id ); ?>" class="wss-product-configurator-wrapper" data-orientation="<?php echo esc_attr($image_orientation); ?>">
-        <div class="wss-configurator-main-layout">
+        <?php
+/**
+ * Descrizione estesa a larghezza piena per orientamento verticale
+ */
+if ( 'vertical' === $image_orientation && $product->get_short_description() ) { ?>
+    <div class="wss-configurator-description-full woocommerce-product-details__short-description">
+        <?php
+        echo apply_filters(
+            'woocommerce_short_description',
+            $product->get_short_description()
+        );
+        ?>
+    </div>
+<?php } ?>
+
+<div class="wss-configurator-main-layout">
 
             <div class="wss-configurator-image-column">
                 <div class="wss-image-container" <?php if ( $background_color ) { echo 'style="background-color: ' . $background_color . ';"'; } ?>>
@@ -62,7 +77,9 @@ if ( post_password_required() ) {
                     <p class="price"><?php echo $product->get_price_html(); ?></p>
                 </div>
 
-                <?php if ( $product->get_short_description() ) : ?>
+                <?php
+                    // Mantieni la descrizione dentro la colonna opzioni solo in orizzontale
+                    if ( 'horizontal' === $image_orientation && $product->get_short_description() ) : ?>
                     <div class="woocommerce-product-details__short-description">
                         <?php echo apply_filters( 'woocommerce_short_description', $product->get_short_description() ); ?>
                     </div>
