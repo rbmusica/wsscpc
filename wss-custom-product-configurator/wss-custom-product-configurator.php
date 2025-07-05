@@ -216,6 +216,7 @@ final class WSS_Custom_Product_Configurator {
                 'debug_panel_enabled' => isset($plugin_settings['debug_panel_visible']) ? (bool)$plugin_settings['debug_panel_visible'] : false,
                 'image_column_width' => isset($plugin_settings['image_column_width']) ? $plugin_settings['image_column_width'] : '50',
                 'image_column_width_unit' => isset($plugin_settings['image_column_width_unit']) ? $plugin_settings['image_column_width_unit'] : '%',
+                'mobile_sticky_top_margin' => isset($plugin_settings['mobile_sticky_top_margin']) ? intval($plugin_settings['mobile_sticky_top_margin']) : 20,
                 'wc_price_args' => array( 
                     'currency_symbol'    => html_entity_decode(get_woocommerce_currency_symbol()), 
                     'decimal_separator'  => wc_get_price_decimal_separator(),

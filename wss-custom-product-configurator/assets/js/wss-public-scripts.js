@@ -42,7 +42,11 @@ jQuery(document).ready(function($) {
 	let scrollTimer = null;
 
 let frozenTriggerPoints = null;
-    let isStickyActive = false;
+let isStickyActive = false;
+let configuratorCompleted = false; // **NUOVO**: Indica se il configuratore ha terminato il suo ciclo
+    let lastStickyToggleTime = 0; // **ANTI-FLICKERING**: Timestamp dell'ultimo cambio di stato
+    let stickyToggleCooldown = 500; // **ANTI-FLICKERING**: Millisecondi di cooldown tra toggle
+    let hysteresisMargin = 100; // **ANTI-FLICKERING**: Pixel di margine isteresi
     
     // **SISTEMA DI DEBUG AVANZATO**
 	// Legge l'impostazione debug dal backend
@@ -51,10 +55,56 @@ let frozenTriggerPoints = null;
     let debugPanel = null;
     let debugLog = [];
     
+    // **FUNZIONE PER CALCOLARE L'ALTEZZA DINAMICA DEL SPACER**
+    function calculateStickySpacerHeight() {
+        if (!optionsColumn.length) return '100vh';
+        
+        const optionsColumnHeight = optionsColumn[0].scrollHeight;
+        const viewportHeight = $(window).height();
+        const viewportHeightVh = viewportHeight; // 100vh in pixels
+        // Use 120vh minimum for vertical layout on desktop, 115vh for others
+        const minimumHeightMultiplier = (imageOrientation === 'vertical' && $(window).width() >= 768) ? 1.20 : 1.15;
+        const minimumHeightVh = viewportHeight * minimumHeightMultiplier;
+        
+        debugMessage('Calculating sticky spacer height', {
+            optionsColumnHeight,
+            viewportHeight,
+            viewportHeightVh,
+            minimumHeightVh,
+            optionsColumnLessThanViewport: optionsColumnHeight < viewportHeightVh
+        });
+        
+        let finalHeight;
+        if (optionsColumnHeight < viewportHeightVh) {
+            // If options column is shorter than viewport, use minimum 115vh
+            finalHeight = Math.max(minimumHeightVh, optionsColumnHeight);
+        } else {
+            // If options column is taller than viewport, use actual height
+            finalHeight = optionsColumnHeight;
+        }
+        
+        debugMessage('Sticky spacer height calculated', {
+            finalHeightPx: finalHeight,
+            finalHeightVh: (finalHeight / viewportHeight * 100).toFixed(1) + 'vh'
+        }, 'success');
+        
+        return finalHeight + 'px';
+    }
+    
+    // **FUNZIONE PER AGGIORNARE L'ALTEZZA DEL SPACER ESISTENTE**
+    function updateStickySpacerHeight() {
+        const existingSpacer = $('.wss-sticky-spacer');
+        if (existingSpacer.length) {
+            const newHeight = calculateStickySpacerHeight();
+            existingSpacer.css('height', newHeight);
+            debugMessage('Updated existing sticky spacer height', { newHeight });
+        }
+    }
+    
     function createDebugPanel() {
         if (!debugMode || debugPanel) return;
         
-		debugPanel = $(`
+        debugPanel = $(`
             <div id="wss-debug-panel" style="
                 position: fixed; 
                 top: 10px; 
@@ -71,22 +121,40 @@ let frozenTriggerPoints = null;
                 border: 1px solid #333;
                 border-radius: 3px;
             ">
-                <div style="color: #fff; margin-bottom: 10px; font-weight: bold;">WSS Debug Panel</div>
-                <div style="margin-bottom: 10px;">
-                    <button id="wss-debug-clear" style="padding: 3px 6px; margin-right: 3px; font-size: 10px;">Clear</button>
-                    <button id="wss-debug-export" style="padding: 3px 6px; margin-right: 3px; font-size: 10px;">Export</button>
-                    <button id="wss-debug-copy" style="padding: 3px 6px; font-size: 10px;">Copy</button>
+                <div style="color: #fff; margin-bottom: 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
+                    WSS Debug Panel
+                    <button id="wss-debug-copy-top" style="padding: 2px 5px; font-size: 10px; background: #333; color: #fff; border: 1px solid #666;">Copy All</button>
                 </div>
                 <div id="wss-debug-content"></div>
-                <div style="margin-top: 10px;">
-                    <button id="wss-debug-clear-bottom" style="padding: 3px 6px; margin-right: 3px; font-size: 10px;">Clear</button>
-                    <button id="wss-debug-export-bottom" style="padding: 3px 6px; margin-right: 3px; font-size: 10px;">Export</button>
-                    <button id="wss-debug-copy-bottom" style="padding: 3px 6px; font-size: 10px;">Copy</button>
+                <div style="margin-top: 10px; display: flex; gap: 5px;">
+                    <button id="wss-debug-clear" style="padding: 5px; flex: 1;">Clear</button>
+                    <button id="wss-debug-export" style="padding: 5px; flex: 1;">Export</button>
+                    <button id="wss-debug-copy-bottom" style="padding: 5px; flex: 1;">Copy All</button>
                 </div>
             </div>
         `);
         
         $('body').append(debugPanel);
+        
+        function copyDebugContent() {
+            const content = debugLog.map(entry => 
+                `[${entry.timestamp}] ${entry.message}${entry.data ? '\n' + JSON.stringify(entry.data, null, 2) : ''}`
+            ).join('\n\n');
+            
+            navigator.clipboard.writeText(content).then(function() {
+                alert('Debug content copied to clipboard!');
+            }).catch(function(err) {
+                console.error('Failed to copy: ', err);
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = content;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('Debug content copied to clipboard (fallback method)!');
+            });
+        }
         
         $('#wss-debug-clear').on('click', function() {
             debugLog = [];
@@ -97,72 +165,8 @@ let frozenTriggerPoints = null;
             console.log('WSS Debug Export:', debugLog);
             alert('Debug log exported to browser console');
         });
-
         
-        // **HANDLER PER BOTTONI COPIA - NUOVO**
-        function copyDebugContent() {
-            // **METODO CORRETTO**: Usa innerHTML e converte
-            const debugContentElement = document.getElementById('wss-debug-content');
-            if (!debugContentElement || !debugContentElement.innerHTML.trim()) {
-                alert('No debug content to copy');
-                return;
-            }
-            
-            // Converte HTML in testo leggibile
-            const textContent = debugContentElement.innerText || debugContentElement.textContent;
-            const fullDebugText = `=== WSS DEBUG PANEL ===\n${textContent}\n\n=== LOGS ARRAY ===\n${JSON.stringify(debugLog, null, 2)}`;
-            
-            // **METODO ROBUSTO** per copiare
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(fullDebugText).then(function() {
-                    alert('Debug content copied to clipboard');
-                }).catch(function(err) {
-                    console.error('Clipboard API failed:', err);
-                    fallbackCopy(fullDebugText);
-                });
-            } else {
-                fallbackCopy(fullDebugText);
-            }
-        }
-        
-        function fallbackCopy(text) {
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-999999px';
-            textArea.style.top = '-999999px';
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            try {
-                const successful = document.execCommand('copy');
-                if (successful) {
-                    alert('Debug content copied to clipboard (fallback method)');
-                } else {
-                    alert('Copy failed. Please copy manually from console.');
-                    console.log('DEBUG CONTENT TO COPY:', text);
-                }
-            } catch (err) {
-                console.error('Fallback copy failed:', err);
-                alert('Copy failed. Content logged to console.');
-                console.log('DEBUG CONTENT TO COPY:', text);
-            }
-            document.body.removeChild(textArea);
-        }
-        
-        $('#wss-debug-copy, #wss-debug-copy-bottom').on('click', copyDebugContent);
-        
-        // **HANDLER PER BOTTONI DUPLICATI**
-        $('#wss-debug-clear-bottom').on('click', function() {
-            debugLog = [];
-            $('#wss-debug-content').html('');
-        });
-        
-        $('#wss-debug-export-bottom').on('click', function() {
-            console.log('WSS Debug Export:', debugLog);
-            alert('Debug log exported to browser console');
-        });
-		
+        $('#wss-debug-copy-top, #wss-debug-copy-bottom').on('click', copyDebugContent);
     }
     
     function debugMessage(message, data = null, level = 'info') {
@@ -346,57 +350,33 @@ let frozenTriggerPoints = null;
         return { fixedImageTopPosition, descriptionHeight };
     }
     
-	function getActualImageColumnWidthFromCSS() {
+function getActualImageColumnWidthFromCSS() {
         if (imageOrientation === 'horizontal') {
             return '100%';
         }
         
         debugMessage('Getting image column width from CSS');
-		
-		// **DEBUG ESTESO PER LARGHEZZA COLONNA**
-        const debugInfo = {
-            windowWidth: $(window).width(),
-            mainLayoutWidth: mainLayout.width(),
-            imageColumnCurrentWidth: imageColumn.width(),
-            imageColumnCurrentCss: imageColumn.css('width'),
-            imageColumnCurrentStyle: imageColumn.attr('style'),
-            customWidthSetting: wss_configurator_data.image_column_width,
-            customWidthUnit: wss_configurator_data.image_column_width_unit
-        };
         
-        debugMessage('Width calculation debug info', debugInfo);		
-        
-		// **CORREZIONE**: Usa le impostazioni personalizzate se disponibili
+        // **NUOVO**: Usa le impostazioni personalizzate se disponibili
         if (typeof wss_configurator_data.image_column_width !== 'undefined' && 
             typeof wss_configurator_data.image_column_width_unit !== 'undefined') {
             
-            const customWidth = parseFloat(wss_configurator_data.image_column_width);
+            const customWidth = wss_configurator_data.image_column_width;
             const customUnit = wss_configurator_data.image_column_width_unit;
             
             debugMessage('Using custom width settings', {
                 width: customWidth,
                 unit: customUnit,
-                combined: customWidth + customUnit,
-                mainLayoutWidth: mainLayout.width()
+                combined: customWidth + customUnit
             });
             
             if (customUnit === 'px') {
-                debugMessage('Applying pixel width', { finalWidth: customWidth });
-                return customWidth;
+                return parseFloat(customWidth);
             } else {
                 // Percentuale - calcola rispetto al main layout
                 if (mainLayout.length && mainLayout.width() > 0) {
-                    const percentage = customWidth / 100;
-                    const calculatedWidth = mainLayout.width() * percentage;
-                    debugMessage('Applying percentage width', { 
-                        percentage: customWidth, 
-                        mainLayoutWidth: mainLayout.width(),
-                        calculatedWidth: calculatedWidth
-                    });
-                    return calculatedWidth;
-                } else {
-                    debugMessage('Main layout width not available, using fallback', null, 'warn');
-                    return 400; // Fallback
+                    const percentage = parseFloat(customWidth) / 100;
+                    return mainLayout.width() * percentage;
                 }
             }
         }
@@ -555,25 +535,23 @@ let frozenTriggerPoints = null;
                     // **CORREZIONE: Considera la descrizione nel calcolo dell'altezza**
                     const availableHeight = `calc(100vh - ${fixedImageTopPosition}px - 20px)`;
                     
-					const imageColumnStyles = {
+                    const imageColumnStyles = {
                         'position': 'relative', // **INIZIA SEMPRE COME RELATIVE**
                         'left': '',
                         'top': '',
                         'width': imageColumnTargetWidthPx + 'px', 
                         'height': availableHeight,
-                        'max-width': 'none',
-                        'flex-shrink': '0' // **PREVIENE IL RIMPICCIOLIMENTO**
+                        'max-width': 'none'
                     };
 
                     const optionsColumnStyles = {
-                        'margin-left': '0', // **RIMUOVI MARGIN-LEFT**
-                        'width': 'auto', // **LASCIA CHE FLEX GESTISCA LA LARGHEZZA**
+                        'margin-left': '', // Rimuovi il margin-left problematico
+                        'width': '', // Lascia che il CSS gestisca la larghezza
                         'min-height': availableHeight, 
                         'position': 'relative', 
                         'top': '', 
                         'height': 'auto',
-                        'padding-top': '',
-                        'flex-grow': '1' // **USA FLEXBOX**
+                        'padding-top': ''
                     };
                     
                     debugMessage('Applying desktop vertical styles', {
@@ -635,7 +613,9 @@ let frozenTriggerPoints = null;
             descriptionHeight,
             imageOrientation,
             isStickyActive,
-            frozenTriggerPoints: frozenTriggerPoints ? 'exists' : 'null'
+            frozenTriggerPoints: frozenTriggerPoints ? 'exists' : 'null',
+            screenResolution: $(window).width() + 'x' + $(window).height(),
+            isLargeScreen: $(window).width() >= 2000 || $(window).height() >= 1200
         });
         
         if (imageOrientation === 'horizontal') {
@@ -730,14 +710,37 @@ let frozenTriggerPoints = null;
                     const optionsColumnHeight = optionsColumn[0].scrollHeight;
                     const viewportHeight = $(window).height() - fixedImageTopPosition;
                     
-                    // **CORREZIONE: Calcolo migliorato dell'unsticky point**
+                    // **CORREZIONE: Calcolo migliorato dell'unsticky point con anti-flickering**
                     let unstickyTriggerPoint;
                     const needsInternalScroll = optionsColumnHeight > viewportHeight;
                     
-                    if (needsInternalScroll) {
-                        // Se serve scroll interno, calcola basandoti sul contenuto
+                    // **ANTI-FLICKERING**: Detect similar heights that cause flickering
+                    const heightDifference = Math.abs(optionsColumnHeight - viewportHeight);
+                    const isSimilarHeight = heightDifference <= 150; // ±150px tolerance
+                    
+                    debugMessage('Height similarity analysis', {
+                        optionsColumnHeight,
+                        viewportHeight,
+                        heightDifference,
+                        isSimilarHeight,
+                        needsInternalScroll,
+                        screenResolution: $(window).width() + 'x' + $(window).height(),
+                        isLargeScreen: $(window).width() >= 2000 || $(window).height() >= 1200
+                    });
+                    
+                    if (needsInternalScroll && !isSimilarHeight) {
+                        // Se serve scroll interno e non ci sono problemi di altezze simili
                         const maxInternalScroll = optionsColumnHeight - viewportHeight;
                         unstickyTriggerPoint = stickyTriggerPoint + maxInternalScroll + viewportHeight + 100;
+                    } else if (isSimilarHeight) {
+                        // **FIX ANTI-FLICKERING**: Per altezze simili, usa un margine più grande
+                        const safetyMargin = viewportHeight * 0.8; // 80% viewport come margine sicurezza
+                        unstickyTriggerPoint = stickyTriggerPoint + viewportHeight + safetyMargin;
+                        
+                        debugMessage('Applied anti-flickering calculation', {
+                            safetyMargin,
+                            calculatedUnstickyPoint: unstickyTriggerPoint
+                        }, 'warn');
                     } else {
                         // Se non serve scroll interno, usa la posizione dei tabs o fine contenuto
                         const contentEndPoint = Math.min(
@@ -791,24 +794,52 @@ let frozenTriggerPoints = null;
             // **USA I TRIGGER POINTS CONGELATI**
             const triggerData = frozenTriggerPoints;
             
-            // **GESTIONE STATI CON TRIGGER STABILI**
-            if (scrollTop > triggerData.stickyTriggerPoint && scrollTop < triggerData.unstickyTriggerPoint) {
+            // **GESTIONE STATI CON TRIGGER STABILI + ISTERESI**
+            const effectiveStickyTrigger = isStickyActive ? 
+                triggerData.stickyTriggerPoint - hysteresisMargin : 
+                triggerData.stickyTriggerPoint;
+            
+            if (scrollTop > effectiveStickyTrigger && scrollTop < triggerData.unstickyTriggerPoint) {
                 debugMessage('Should be sticky', {
                     scrollTop,
                     stickyTriggerPoint: triggerData.stickyTriggerPoint,
+                    effectiveStickyTrigger,
+                    hysteresisApplied: isStickyActive,
                     unstickyTriggerPoint: triggerData.unstickyTriggerPoint,
-                    currentlySticky: isStickyActive
+                    currentlySticky: isStickyActive,
+                    configuratorCompleted,
+                    triggerRange: triggerData.unstickyTriggerPoint - triggerData.stickyTriggerPoint,
+                    screenResolution: $(window).width() + 'x' + $(window).height()
                 });
+                
+                // **NUOVO**: Se il configuratore è già stato completato, non riattivarlo
+                if (configuratorCompleted) {
+                    debugMessage('Configurator already completed, skipping sticky activation', null, 'warn');
+                    return;
+                }
                 
                 // **STATO STICKY**
                 if (!isStickyActive) {
+                    // **ANTI-FLICKERING**: Controlla cooldown
+                    const now = Date.now();
+                    if (now - lastStickyToggleTime < stickyToggleCooldown) {
+                        debugMessage('Sticky activation blocked by cooldown', {
+                            timeSinceLastToggle: now - lastStickyToggleTime,
+                            cooldownRequired: stickyToggleCooldown
+                        }, 'warn');
+                        return;
+                    }
+                    
                     debugMessage('Activating sticky mode', null, 'success');
                     isStickyActive = true;
+                    lastStickyToggleTime = now;
                     
                     productContainer.addClass('wss-sticky-container');
                     
                     if (!$('.wss-sticky-spacer').length) {
-                        productContainer.after('<div class="wss-sticky-spacer"></div>');
+                        const spacerHeight = calculateStickySpacerHeight();
+                        productContainer.after(`<div class="wss-sticky-spacer" style="height: ${spacerHeight}"></div>`);
+                        debugMessage('Created sticky spacer with dynamic height', { spacerHeight });
                     }
                     
                     const stickyStyles = {
@@ -826,50 +857,27 @@ let frozenTriggerPoints = null;
                     
                     mainLayout.css(stickyStyles);
                     
-                    // **CORREZIONE LAYOUT STICKY - USA FLEXBOX**
-                    const imageColumnTargetWidthPx = getActualImageColumnWidthFromCSS();
-                    
-                    debugMessage('Sticky layout correction', {
-                        imageColumnTargetWidthPx,
-                        beforeImageColumnCSS: imageColumn.css(['width', 'margin-left', 'position']),
-                        beforeOptionsColumnCSS: optionsColumn.css(['width', 'margin-left', 'position'])
-                    });
-                    
                     imageColumn.css({
                         'position': 'relative',
                         'top': '',
                         'left': '',
-                        'width': imageColumnTargetWidthPx + 'px',
-                        'height': 'calc(100vh - 0px)',
-                        'margin-left': '0',
-                        'flex-shrink': '0' // **IMPEDISCE RIDIMENSIONAMENTO**
+                        'width': '',
+                        'height': '',
+                        'margin-left': ''
                     });
                     
                     optionsColumn.css({
                         'position': 'relative',
                         'top': '',
-                        'margin-left': '0', // **RIMUOVI MARGIN-LEFT**
-                        'width': 'auto', // **LASCIA CHE FLEX GESTISCA**
-                        'height': 'calc(100vh - 0px)',
+                        'margin-left': '0', // Forza margin-left a 0 per orientamento verticale
+                        'width': '',
+                        'height': '',
                         'overflow-y': 'auto',
-                        'min-height': '',
-                        'flex-grow': '1' // **PRENDE SPAZIO RIMANENTE**
-                    });
-                    
-                    debugMessage('Applied sticky layout correction', {
-                        imageColumnTargetWidthPx,
-                        afterImageColumnCSS: imageColumn.css(['width', 'margin-left', 'position', 'flex-shrink']),
-                        afterOptionsColumnCSS: optionsColumn.css(['width', 'margin-left', 'position', 'flex-grow'])
-                    }, 'success');
-                    
-                    debugMessage('Applied dynamic sticky layout', {
-                        imageColumnWidth: imageColumnTargetWidthPx,
-                        optionsColumnMarginLeft: imageColumnTargetWidthPx,
-                        optionsColumnWidth: `calc(100% - ${imageColumnTargetWidthPx}px)`
+                        'min-height': ''
                     });
                 }
                 
-                // **GESTIONE SCROLL INTERNO**
+                // **GESTIONE SCROLL INTERNO CON TRANSIZIONE QUANDO FINISCONO LE OPZIONI**
                 if (triggerData.needsInternalScroll) {
                     const internalScrollProgress = scrollTop - triggerData.stickyTriggerPoint;
                     const maxInternalScroll = triggerData.optionsColumnHeight - triggerData.viewportHeight + 40;
@@ -878,38 +886,323 @@ let frozenTriggerPoints = null;
                     debugMessage('Internal scroll calculation', {
                         internalScrollProgress,
                         maxInternalScroll,
-                        clampedInternalScroll
+                        clampedInternalScroll,
+                        isAtBottom: clampedInternalScroll >= maxInternalScroll
                     });
                     
-                    optionsColumn.scrollTop(clampedInternalScroll);
+                    // **NUOVO**: Se abbiamo raggiunto la fine delle opzioni, inizia a far scorrere il contenitore
+                    if (clampedInternalScroll >= maxInternalScroll) {
+                        // Siamo alla fine delle opzioni, ora il contenitore deve scorrere
+                        const excessScroll = internalScrollProgress - maxInternalScroll;
+                        const maxContainerScroll = $(window).height() * 0.8; // Max 80% viewport
+                        const containerScrollAmount = Math.min(excessScroll, maxContainerScroll);
+                        
+                        debugMessage('Container scroll mode active', {
+                            excessScroll,
+                            maxContainerScroll,
+                            containerScrollAmount
+                        });
+                        
+                        // Scorri le opzioni fino alla fine
+                        optionsColumn.scrollTop(maxInternalScroll);
+                        
+                        // Inizia a far scorrere il contenitore verso l'alto
+                        const newTopPosition = fixedImageTopPosition - containerScrollAmount;
+                        mainLayout.css({
+                            'top': newTopPosition + 'px',
+                            'transition': 'none' // Rimuovi transizione per scroll fluido
+                        });
+                        
+                        // Aggiungi classe per effetti visivi
+                        if (!productContainer.hasClass('wss-container-scrolling')) {
+                            productContainer.addClass('wss-container-scrolling');
+                        }
+                        
+                        // Indica che le opzioni sono finite
+                        if (!optionsColumn.hasClass('wss-options-finished')) {
+                            optionsColumn.addClass('wss-options-finished');
+                        }
+                        
+                        // **NUOVO**: Se il contenitore è andato troppo in alto, esci dalla modalità sticky
+                        if (containerScrollAmount >= maxContainerScroll) {
+                            debugMessage('Container fully scrolled up, exiting sticky mode', {
+                                containerScrollAmount,
+                                maxContainerScroll
+                            });
+                            
+                            // **CORREZIONE**: Calcola la posizione finale precisa per allineare con la descrizione
+                            const nextContentElement = productContainer.next();
+                            let finalTopPosition = 0;
+                            
+                            if (nextContentElement.length) {
+                                // Calcola dove dovrebbe essere il contenitore per allineare perfettamente
+                                const nextElementTop = nextContentElement.offset().top;
+                                const containerHeight = $(window).height() - fixedImageTopPosition;
+                                const marginBuffer = 20; // Piccolo margine per evitare sovrapposizioni
+                                finalTopPosition = nextElementTop - containerHeight - fixedImageTopPosition - marginBuffer;
+                                
+                                debugMessage('Final positioning calculation', {
+                                    nextElementTop,
+                                    containerHeight,
+                                    finalTopPosition,
+                                    fixedImageTopPosition,
+                                    marginBuffer,
+                                    screenResolution: $(window).width() + 'x' + $(window).height(),
+                                    viewportHeight: $(window).height()
+                                });
+                            } else {
+                                // Fallback: usa la posizione calcolata originale
+                                finalTopPosition = fixedImageTopPosition - maxContainerScroll;
+                                
+                                debugMessage('Fallback positioning', {
+                                    finalTopPosition,
+                                    maxContainerScroll,
+                                    screenResolution: $(window).width() + 'x' + $(window).height()
+                                });
+                            }
+                            
+                            // Posiziona il contenitore nella posizione finale calcolata
+                            mainLayout.css({
+                                'position': 'fixed',
+                                'top': finalTopPosition + 'px',
+                                'transition': 'top 0.2s ease-out'
+                            });
+                            
+                            // Dopo la transizione, esci dalla modalità sticky
+                            setTimeout(() => {
+                                // Esci definitivamente dalla modalità sticky
+                                isStickyActive = false;
+                                frozenTriggerPoints = null;
+                                configuratorCompleted = true; // **NUOVO**: Marca come completato
+                                
+                                productContainer.removeClass('wss-sticky-container wss-container-scrolling');
+                                $('.wss-sticky-spacer').remove();
+                                
+                                // Ripristina il layout normale
+                                mainLayout.css({
+                                    'position': '',
+                                    'top': '',
+                                    'left': '',
+                                    'right': '',
+                                    'width': '',
+                                    'height': '',
+                                    'z-index': '',
+                                    'background': '',
+                                    'transition': ''
+                                });
+                                
+                                adjustLayout();
+                                optionsColumn.scrollTop(0);
+                                optionsColumn.removeClass('wss-nearing-end wss-options-finished');
+                                
+                                debugMessage('Sticky mode permanently exited with precise positioning', null, 'success');
+                            }, 200);
+                        }
+                        
+                    } else {
+                        // Scroll normale delle opzioni
+                        optionsColumn.scrollTop(clampedInternalScroll);
+                        
+                        // Ripristina la posizione normale del contenitore
+                        mainLayout.css({
+                            'top': fixedImageTopPosition + 'px',
+                            'transition': 'none'
+                        });
+                        
+                        // Rimuovi le classi di scroll del contenitore
+                        productContainer.removeClass('wss-container-scrolling');
+                        optionsColumn.removeClass('wss-options-finished');
+                        
+                        // Indicatore visivo quando si sta per raggiungere la fine
+                        const scrollProgress = clampedInternalScroll / maxInternalScroll;
+                        if (scrollProgress > 0.9) {
+                            if (!optionsColumn.hasClass('wss-nearing-end')) {
+                                optionsColumn.addClass('wss-nearing-end');
+                                debugMessage('Options nearing end - visual indicator added');
+                            }
+                        } else {
+                            optionsColumn.removeClass('wss-nearing-end');
+                        }
+                    }
+                } else {
+                    // Se non c'è bisogno di scroll interno, gestisci diversamente
+                    const internalScrollProgress = scrollTop - triggerData.stickyTriggerPoint;
+                    
+                    // Dopo un po' di scroll, inizia a far scorrere il contenitore
+                    if (internalScrollProgress > $(window).height() * 0.5) {
+                        const excessScroll = internalScrollProgress - $(window).height() * 0.5;
+                        const maxContainerScroll = $(window).height() * 0.8;
+                        const containerScrollAmount = Math.min(excessScroll, maxContainerScroll);
+                        
+                        const newTopPosition = fixedImageTopPosition - containerScrollAmount;
+                        
+                        // **DEBUG CRITICO**: Log movimento del configuratore
+                        debugMessage('Moving configurator position', {
+                            containerScrollAmount,
+                            maxContainerScroll,
+                            newTopPosition,
+                            fixedImageTopPosition,
+                            scrollProgress: (containerScrollAmount / maxContainerScroll * 100).toFixed(1) + '%',
+                            screenResolution: $(window).width() + 'x' + $(window).height(),
+                            isNearMax: containerScrollAmount >= (maxContainerScroll * 0.9)
+                        });
+                        
+                        mainLayout.css({
+                            'top': newTopPosition + 'px',
+                            'transition': 'none'
+                        });
+                        
+                        productContainer.addClass('wss-container-scrolling');
+                        
+                        // **NUOVO**: Se il contenitore è andato troppo in alto, esci dalla modalità sticky
+                        if (containerScrollAmount >= maxContainerScroll) {
+                            debugMessage('Container fully scrolled up (no internal scroll), exiting sticky mode', {
+                                containerScrollAmount,
+                                maxContainerScroll
+                            });
+                            
+                            // **CORREZIONE**: Calcola la posizione finale precisa per allineare con la descrizione
+                            const nextContentElement = productContainer.next();
+                            let finalTopPosition = 0;
+                            
+                            if (nextContentElement.length) {
+                                // Calcola dove dovrebbe essere il contenitore per allineare perfettamente
+                                const nextElementTop = nextContentElement.offset().top;
+                                const containerHeight = $(window).height() - fixedImageTopPosition;
+                                const marginBuffer = 20; // Piccolo margine per evitare sovrapposizioni
+                                finalTopPosition = nextElementTop - containerHeight - fixedImageTopPosition - marginBuffer;
+                                
+                                debugMessage('Final positioning calculation (no internal scroll)', {
+                                    nextElementTop,
+                                    containerHeight,
+                                    finalTopPosition,
+                                    fixedImageTopPosition,
+                                    marginBuffer,
+                                    screenResolution: $(window).width() + 'x' + $(window).height(),
+                                    viewportHeight: $(window).height()
+                                });
+                            } else {
+                                // Fallback: usa la posizione calcolata originale
+                                finalTopPosition = fixedImageTopPosition - maxContainerScroll;
+                                
+                                debugMessage('Fallback positioning (no internal scroll)', {
+                                    finalTopPosition,
+                                    maxContainerScroll,
+                                    screenResolution: $(window).width() + 'x' + $(window).height()
+                                });
+                            }
+                            
+                            // Posiziona il contenitore nella posizione finale calcolata
+                            mainLayout.css({
+                                'position': 'fixed',
+                                'top': finalTopPosition + 'px',
+                                'transition': 'top 0.2s ease-out'
+                            });
+                            
+                            // Dopo la transizione, esci dalla modalità sticky
+                            setTimeout(() => {
+                                // Esci definitivamente dalla modalità sticky
+                                isStickyActive = false;
+                                frozenTriggerPoints = null;
+                                configuratorCompleted = true; // **NUOVO**: Marca come completato
+                                
+                                productContainer.removeClass('wss-sticky-container wss-container-scrolling');
+                                $('.wss-sticky-spacer').remove();
+                                
+                                // Ripristina il layout normale
+                                mainLayout.css({
+                                    'position': '',
+                                    'top': '',
+                                    'left': '',
+                                    'right': '',
+                                    'width': '',
+                                    'height': '',
+                                    'z-index': '',
+                                    'background': '',
+                                    'transition': ''
+                                });
+                                
+                                adjustLayout();
+                                optionsColumn.scrollTop(0);
+                                optionsColumn.removeClass('wss-nearing-end wss-options-finished');
+                                
+                                debugMessage('Sticky mode permanently exited (no internal scroll) with precise positioning', null, 'success');
+                            }, 200);
+                        }
+                    } else {
+                        mainLayout.css({
+                            'top': fixedImageTopPosition + 'px',
+                            'transition': 'none'
+                        });
+                        productContainer.removeClass('wss-container-scrolling');
+                    }
                 }
                 
 			} else if (scrollTop >= triggerData.unstickyTriggerPoint) {
-                // **CORREZIONE**: Quando si raggiunge il punto di unsticky, 
-                // riporta il configuratore alla sua posizione normale invece di absolute
+                // **NUOVO**: Transizione fluida quando finiscono le opzioni
                 
                 if (isStickyActive) {
+                    debugMessage('Transitioning to unsticky mode with smooth scroll', {
+                        scrollTop,
+                        unstickyTriggerPoint: triggerData.unstickyTriggerPoint
+                    });
+                    
                     isStickyActive = false;
                     frozenTriggerPoints = null;
                     
-                    productContainer.removeClass('wss-sticky-container');
-                    $('.wss-sticky-spacer').remove();
+                    // **NUOVO**: Aggiungi classe di transizione
+                    productContainer.addClass('wss-transitioning-out');
                     
-                    // **FIX**: Ripristina il layout normale invece di posizionamento assoluto
-                    mainLayout.css({
-                        'position': '',
-                        'top': '',
-                        'left': '',
-                        'right': '',
-                        'width': '',
-                        'height': '',
-                        'z-index': '',
-                        'background': ''
+                    // **NUOVO**: Calcola quanto deve scorrere il contenitore
+                    const remainingScroll = scrollTop - triggerData.unstickyTriggerPoint;
+                    const maxContainerScroll = $(window).height() * 0.8; // Massimo 80% dell'altezza viewport
+                    const containerScrollAmount = Math.min(remainingScroll, maxContainerScroll);
+                    
+                    debugMessage('Container scroll calculation', {
+                        remainingScroll,
+                        maxContainerScroll,
+                        containerScrollAmount
                     });
                     
-                    // **FIX**: Ripristina il layout normale
-                    adjustLayout();
-                    optionsColumn.scrollTop(0);
+                    // **NUOVO**: Anima il contenitore verso l'alto
+                    mainLayout.css({
+                        'position': 'fixed',
+                        'top': (fixedImageTopPosition - containerScrollAmount) + 'px',
+                        'left': '0',
+                        'right': '0',
+                        'width': '100%',
+                        'height': `calc(100vh - ${fixedImageTopPosition}px)`,
+                        'z-index': '1000',
+                        'background': '#fff',
+                        'transition': 'top 0.3s ease-out'
+                    });
+                    
+                    // **NUOVO**: Quando l'animazione è completata, ripristina il layout normale
+                    setTimeout(() => {
+                        if (!isStickyActive) {
+                            productContainer.removeClass('wss-sticky-container wss-transitioning-out');
+                            $('.wss-sticky-spacer').remove();
+                            
+                            mainLayout.css({
+                                'position': '',
+                                'top': '',
+                                'left': '',
+                                'right': '',
+                                'width': '',
+                                'height': '',
+                                'z-index': '',
+                                'background': '',
+                                'transition': ''
+                            });
+                            
+                            adjustLayout();
+                            optionsColumn.scrollTop(0);
+                            optionsColumn.removeClass('wss-nearing-end wss-options-finished');
+                            productContainer.removeClass('wss-container-scrolling');
+                            
+                            debugMessage('Smooth transition completed', null, 'success');
+                        }
+                    }, 300);
                 }
 
 
@@ -917,12 +1210,28 @@ let frozenTriggerPoints = null;
             } else {
                 debugMessage('Should be normal (before sticky)', {
                     scrollTop,
-                    stickyTriggerPoint: triggerData.stickyTriggerPoint
+                    stickyTriggerPoint: triggerData.stickyTriggerPoint,
+                    effectiveStickyTrigger,
+                    hysteresisMargin,
+                    currentlySticky: isStickyActive
                 });
                 
                 if (isStickyActive) {
+                    // **ANTI-FLICKERING**: Controlla cooldown per disattivazione
+                    const now = Date.now();
+                    if (now - lastStickyToggleTime < stickyToggleCooldown) {
+                        debugMessage('Sticky deactivation blocked by cooldown', {
+                            timeSinceLastToggle: now - lastStickyToggleTime,
+                            cooldownRequired: stickyToggleCooldown,
+                            scrollTop,
+                            stickyTriggerPoint: triggerData.stickyTriggerPoint
+                        }, 'warn');
+                        return;
+                    }
+                    
                     debugMessage('Deactivating sticky (top)', null, 'warn');
                     isStickyActive = false;
+                    lastStickyToggleTime = now;
                     frozenTriggerPoints = null; // **RESET TRIGGER POINTS**
                     
                     productContainer.removeClass('wss-sticky-container');
@@ -941,12 +1250,22 @@ let frozenTriggerPoints = null;
                     
                     adjustLayout();
                     optionsColumn.scrollTop(0);
+                    optionsColumn.removeClass('wss-nearing-end wss-options-finished');
+                    productContainer.removeClass('wss-container-scrolling');
+                }
+                
+                // **NUOVO**: Se siamo tornati molto in alto, resetta lo stato di completamento
+                if (scrollTop < triggerData.stickyTriggerPoint - $(window).height()) {
+                    if (configuratorCompleted) {
+                        debugMessage('Resetting configurator completion state', null, 'info');
+                        configuratorCompleted = false;
+                    }
                 }
             }
         }
     }
     
-	function handleScrollMobile() {
+    function handleScrollMobile() {
         if (!imageColumn.length || !mainLayout.length) return;
         if ($(window).width() >= 768 || !layoutInitialized) { 
             if ($(window).width() >= 768 && layoutInitialized) {
@@ -960,148 +1279,129 @@ let frozenTriggerPoints = null;
 
         const scrollTop = $(window).scrollTop();
         const adminBarHeight = $wpAdminBar.length && $wpAdminBar.is(':visible') ? $wpAdminBar.outerHeight() : 0;
-        const mobileFixedTop = adminBarHeight; 
+        const configuredTopMargin = wss_configurator_data.mobile_sticky_top_margin || 20;
+        const mobileFixedTop = adminBarHeight + configuredTopMargin;
         const imageColumnNaturalTopInDocument = mainLayout.offset().top; 
         const tabsOffsetTop = $tabsWrapper.length ? $tabsWrapper.offset().top : $(document).height();
         
-        debugMessage('Mobile scroll calculation - CORRECTED', {
+        debugMessage('Mobile scroll calculation', {
             scrollTop,
             adminBarHeight,
+            configuredTopMargin,
             mobileFixedTop,
             imageColumnNaturalTopInDocument,
             tabsOffsetTop,
-            windowWidth: $(window).width(),
-            imageColumnCurrentCSS: imageColumn.css(['position', 'top', 'left', 'width', 'height', 'z-index'])
+            imageOrientation
         });
         
-        let imageEffectiveHeightForCalc;
-        if (imageOrientation === 'horizontal') {
-            imageEffectiveHeightForCalc = imageColumn.find('.wss-image-container').outerHeight();
-        } else {
-            imageEffectiveHeightForCalc = parseFloat(imageColumn.css('height'));
-            if (isNaN(imageEffectiveHeightForCalc) || imageEffectiveHeightForCalc <= 0) {
-                imageEffectiveHeightForCalc = $(window).height() * 0.6;
-            }
-        }
-
-        const stickTriggerPoint = imageColumnNaturalTopInDocument - mobileFixedTop;
-        
-        // **CORREZIONE TRIGGER POINT**: Calcola basandoti sulla fine del contenuto
-        let unstickTriggerPoint;
-        if (tabsOffsetTop > imageColumnNaturalTopInDocument) {
-            // Caso normale: tabs dopo il configuratore
-            unstickTriggerPoint = tabsOffsetTop - imageEffectiveHeightForCalc - mobileFixedTop - 20;
-        } else {
-            // **CASO PROBLEMATICO**: tabs prima del configuratore - usa fine documento
-            unstickTriggerPoint = $(document).height() - imageEffectiveHeightForCalc - 100;
-        }
-
-        debugMessage('Mobile trigger points - FIXED', {
-            imageEffectiveHeightForCalc,
-            stickTriggerPoint,
-            unstickTriggerPoint,
-            tabsOffsetTop,
-            imageColumnNaturalTopInDocument,
-            documentHeight: $(document).height(),
-            shouldStick: scrollTop > stickTriggerPoint,
-            shouldUnstick: scrollTop > unstickTriggerPoint && unstickTriggerPoint > stickTriggerPoint,
-            triggerLogicValid: unstickTriggerPoint > stickTriggerPoint
-        });
-
-        if (scrollTop > stickTriggerPoint) { 
-            optionsColumn.css('padding-top', imageEffectiveHeightForCalc + 'px');
-
-            if (scrollTop > unstickTriggerPoint && unstickTriggerPoint > stickTriggerPoint) {
-                debugMessage('Mobile unstick position - FIXED');
-                
-                // **CORREZIONE**: Calcola posizione relativa al main layout, non assoluta
-                let relativeTop;
-                if (tabsOffsetTop > imageColumnNaturalTopInDocument) {
-                    relativeTop = tabsOffsetTop - imageColumnNaturalTopInDocument - imageEffectiveHeightForCalc - 20;
-                } else {
-                    // Se tabs sono sopra, posiziona alla fine del main layout
-                    relativeTop = mainLayout.height() - imageEffectiveHeightForCalc;
-                }
-                
-                // **ASSICURA CHE NON SIA NEGATIVO**
-                relativeTop = Math.max(0, relativeTop);
-                
-                imageColumn.css({
-                    'position': 'absolute',
-                    'top': relativeTop + 'px',
-                    'left': '0', 
-                    'right': '0',
-                    'width': 'auto',
-                    'z-index': '1000',
-                    'height': imageOrientation === 'horizontal' ? 'auto' : imageEffectiveHeightForCalc + 'px',
-                    'max-width': 'none',
-                    'margin-left': '0',
-                    'margin-right': '0'
-                });
-                
-                debugMessage('Applied mobile unstick styles - FIXED', {
-                    position: 'absolute',
-                    calculatedTop: relativeTop,
-                    finalTop: relativeTop,
-                    height: imageEffectiveHeightForCalc,
-                    tabsOffsetTop,
-                    imageColumnNaturalTopInDocument,
-                    mainLayoutHeight: mainLayout.height()
-                });
-            } else { 
-                debugMessage('Mobile fixed position - FIXED');
-                
-                debugMessage('Applied mobile unstick styles', {
-                    position: 'absolute',
-                    top: absoluteTop,
-                    height: imageEffectiveHeightForCalc
-                });
-            } else { 
-                debugMessage('Mobile fixed position - CORRECTED');
-                const mainLayoutOffset = mainLayout.offset();
-                const mainLayoutWidth = mainLayout.width();
-                
-                imageColumn.css({
-                    'position': 'fixed', 
-                    'top': mobileFixedTop + 'px',
-                    'left': mainLayoutOffset.left + 'px', 
-                    'right': 'auto', // **SPECIFICA right**
-                    'width': mainLayoutWidth + 'px',    
-                    'height': imageOrientation === 'horizontal' ? 'auto' : imageEffectiveHeightForCalc + 'px', 
-                    'z-index': '1000', // **Z-INDEX ALTO**
-                    'max-width': 'none',
-                    'margin-left': '0', // **RIMUOVI QUALSIASI MARGIN**
-                    'margin-right': '0',
-                    'background-color': '#fff' // **AGGIUNTO BACKGROUND**
-                });
-                
-                debugMessage('Applied mobile fixed styles', {
-                    position: 'fixed',
-                    top: mobileFixedTop,
-                    left: mainLayoutOffset.left,
-                    width: mainLayoutWidth,
-                    height: imageEffectiveHeightForCalc,
-                    zIndex: 1000
-                });
-            }
-        } else { 
-            debugMessage('Mobile normal position - CORRECTED');
-            optionsColumn.css('padding-top', '');
-            imageColumn.css({
-                'position': 'relative', 
-                'top': '', 
-                'left': '', 
-                'right': '', // **RIMUOVI RIGHT**
-                'width': '100%', 
-                'z-index': '10',
-                'height': '',
-                'max-width': '',
-                'margin-left': '', // **RIPRISTINA MARGIN**
-                'margin-right': '',
-                'background-color': '' // **RIMUOVI BACKGROUND**
+        // Nuovo comportamento per orientamento verticale
+        if (imageOrientation === 'vertical') {
+            const viewportHeight = $(window).height();
+            const imageTargetHeight = viewportHeight * 0.5; // 50% dell'altezza viewport
+            const stickTriggerPoint = imageColumnNaturalTopInDocument - mobileFixedTop;
+            
+            debugMessage('Mobile vertical sticky calculation', {
+                viewportHeight,
+                imageTargetHeight,
+                stickTriggerPoint,
+                shouldStick: scrollTop > stickTriggerPoint
             });
             
-            debugMessage('Applied mobile normal styles');
+            if (scrollTop > stickTriggerPoint) {
+                debugMessage('Mobile vertical sticky active');
+                // Immagine sticky al 50% dell'altezza
+                imageColumn.css({
+                    'position': 'fixed',
+                    'top': mobileFixedTop + 'px',
+                    'left': '0',
+                    'width': '100%',
+                    'height': imageTargetHeight + 'px',
+                    'z-index': '1000',
+                    'max-width': 'none'
+                });
+                
+                // Colonna opzioni occupa il restante 50% + padding-top per compensare l'immagine sticky
+                optionsColumn.css({
+                    'padding-top': imageTargetHeight + 'px',
+                    'height': 'auto',
+                    'min-height': (viewportHeight - imageTargetHeight) + 'px'
+                });
+            } else {
+                debugMessage('Mobile vertical normal position');
+                // Posizione normale
+                imageColumn.css({
+                    'position': 'relative',
+                    'top': '',
+                    'left': '',
+                    'width': '100%',
+                    'height': '',
+                    'z-index': '10',
+                    'max-width': ''
+                });
+                
+                optionsColumn.css({
+                    'padding-top': '',
+                    'height': 'auto',
+                    'min-height': ''
+                });
+            }
+        } else {
+            // Comportamento esistente per orientamento orizzontale
+            let imageEffectiveHeightForCalc = imageColumn.find('.wss-image-container').outerHeight();
+            
+            const stickTriggerPoint = imageColumnNaturalTopInDocument - mobileFixedTop;
+            const unstickTriggerPoint = tabsOffsetTop - imageEffectiveHeightForCalc - mobileFixedTop - 20;
+
+            debugMessage('Mobile horizontal trigger points', {
+                imageEffectiveHeightForCalc,
+                stickTriggerPoint,
+                unstickTriggerPoint,
+                shouldStick: scrollTop > stickTriggerPoint,
+                shouldUnstick: scrollTop > unstickTriggerPoint && unstickTriggerPoint > 0
+            });
+
+            imageColumn.css({'max-width': 'none'}); 
+
+            if (scrollTop > stickTriggerPoint) { 
+                optionsColumn.css('padding-top', imageEffectiveHeightForCalc + 'px');
+
+                if (scrollTop > unstickTriggerPoint && unstickTriggerPoint > 0) { 
+                    debugMessage('Mobile horizontal unstick position');
+                    const unstickTopPosition = Math.max(0, tabsOffsetTop - imageColumnNaturalTopInDocument - imageEffectiveHeightForCalc - 20);
+                    
+                    debugMessage('Mobile horizontal unstick position calculation', {
+                        tabsOffsetTop,
+                        imageColumnNaturalTopInDocument,
+                        imageEffectiveHeightForCalc,
+                        originalCalculation: (tabsOffsetTop - imageColumnNaturalTopInDocument - imageEffectiveHeightForCalc - 20),
+                        correctedPosition: unstickTopPosition
+                    });
+                    
+                    imageColumn.css({
+                        'position': 'absolute',
+                        'top': unstickTopPosition + 'px',
+                        'left': '0', 'width': '100%', 'z-index': '10',
+                        'height': imageEffectiveHeightForCalc + 'px', 
+                    });
+                } else { 
+                    debugMessage('Mobile horizontal fixed position');
+                    imageColumn.css({
+                        'position': 'fixed', 'top': mobileFixedTop + 'px',
+                        'left': mainLayout.offset().left + 'px', 
+                        'width': mainLayout.width() + 'px',    
+                        'height': imageEffectiveHeightForCalc + 'px', 
+                        'z-index': '1000' 
+                    });
+                }
+            } else { 
+                debugMessage('Mobile horizontal normal position');
+                optionsColumn.css('padding-top', '');
+                imageColumn.css({
+                    'position': 'relative', 'top': '', 'left': '', 'width': '100%', 'z-index': '10',
+                    'height': '',
+                    'max-width': '' 
+                });
+            }
         }
     }
 
@@ -1297,6 +1597,11 @@ let frozenTriggerPoints = null;
         
         updatePriceDisplay(currentTotalPrice); 
         updateProductImage(currentBaseImageUrl, activeLayers);
+        
+        // Update spacer height when configuration changes (may affect options column height)
+        setTimeout(() => {
+            updateStickySpacerHeight();
+        }, 100); // Small delay to ensure DOM has updated
     }
     
     function findOptionData(charSlug, optValue) { 
@@ -1608,6 +1913,9 @@ let frozenTriggerPoints = null;
                 
                 debugMessage('Executing resize layout adjustment');
                 debouncedAdjustLayout(true);
+                
+                // Update spacer height on resize
+                updateStickySpacerHeight();
                 
                 setTimeout(function() {
                     if ($(window).width() >= 768) {

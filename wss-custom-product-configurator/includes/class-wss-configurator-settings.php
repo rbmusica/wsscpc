@@ -298,6 +298,14 @@ class WSS_Configurator_Settings {
             'wss-configurator-settings-general',
             'wss_general_section'
         );		
+        // Campo per margine superiore mobile sticky
+        add_settings_field(
+            'wss_mobile_sticky_top_margin',
+            'Margine Superiore Mobile Sticky',
+            array( $this, 'render_mobile_sticky_margin_field' ),
+            'wss-configurator-settings-general',
+            'wss_general_section'
+        );
     }
 
     public function render_debug_field() {
@@ -323,8 +331,12 @@ class WSS_Configurator_Settings {
         $options = get_option('wss_configurator_settings');
         $width_value = isset($options['image_column_width']) ? $options['image_column_width'] : '50';
         $width_unit = isset($options['image_column_width_unit']) ? $options['image_column_width_unit'] : '%';
+        
+        // Imposta min/max corretti in base all'unità
+        $min_value = ($width_unit === '%') ? '30' : '200';
+        $max_value = ($width_unit === '%') ? '70' : '800';
         ?>
-        <input type="number" name="wss_configurator_settings[image_column_width]" value="<?php echo esc_attr($width_value); ?>" min="200" max="800" step="10" style="width: 80px;" />
+        <input type="number" name="wss_configurator_settings[image_column_width]" value="<?php echo esc_attr($width_value); ?>" min="<?php echo $min_value; ?>" max="<?php echo $max_value; ?>" step="<?php echo ($width_unit === '%') ? '1' : '10'; ?>" style="width: 80px;" />
         <select name="wss_configurator_settings[image_column_width_unit]">
             <option value="%" <?php selected($width_unit, '%'); ?>>%</option>
             <option value="px" <?php selected($width_unit, 'px'); ?>>px</option>
@@ -366,6 +378,16 @@ class WSS_Configurator_Settings {
             });
         });
         </script>
+        <?php
+    }
+
+    public function render_mobile_sticky_margin_field() {
+        $options = get_option('wss_configurator_settings');
+        $margin_value = isset($options['mobile_sticky_top_margin']) ? $options['mobile_sticky_top_margin'] : '20';
+        ?>
+        <input type="number" name="wss_configurator_settings[mobile_sticky_top_margin]" value="<?php echo esc_attr($margin_value); ?>" min="-200" max="200" step="1" style="width: 80px;" />
+        <span>px</span>
+        <p class="description"><?php _e('Margine superiore per l\'immagine sticky su mobile nel layout verticale. Default: 20px. Range: -200 a 200px (valori negativi per sovrapporre l\'immagine al contenuto sopra).', 'wss-custom-product-configurator'); ?></p>
         <?php
     }
 
